@@ -1,0 +1,158 @@
+Project Name: Govt Cards Organiser
+
+Goal:
+Build a simple, offline-first web application to organize government ID cards (PDF only) for a family.
+The app should allow adding/removing people and government cards dynamically without changing code.
+
+📌 Tech Stack (STRICT)
+
+Frontend: HTML, CSS, Vanilla JavaScript only
+
+Backend: None
+
+Storage: JSON file
+
+Files: PDF only (no images, no databases)
+
+Must run by simply opening index.html
+
+📁 Folder Structure (MUST FOLLOW EXACTLY)
+govt-cards-organiser/
+│
+├── index.html              # Home page (Cards | People)
+├── cards.html              # Browse by card type
+├── people.html             # Browse by people
+│
+├── css/
+│   └── style.css           # Common styling
+│
+├── js/
+│   ├── data.js             # Load + save JSON
+│   ├── cards.js            # Cards page logic
+│   ├── people.js           # People page logic
+│   └── common.js           # Shared helpers
+│
+├── data/
+│   └── data.json           # MAIN DATA FILE
+│
+├── pdfs/
+│   ├── aadhaar/
+│   ├── pan/
+│   ├── voterid/
+│   └── ration/
+│
+└── README.md
+
+🧠 Data Design (data/data.json)
+
+Use this exact structure:
+
+{
+  "people": [
+    {
+      "id": "p1",
+      "name": "Shakeel Ahmed",
+      "cards": {
+        "aadhaar": "shakeel_aadhaar.pdf",
+        "pan": "shakeel_pan.pdf"
+      }
+    }
+  ],
+  "cardTypes": ["aadhaar", "pan", "voterid", "ration"]
+}
+
+🏠 index.html (Home)
+
+Simple layout with two buttons:
+
+Browse by Cards
+
+Browse by People
+
+Clicking navigates to cards.html or people.html
+
+🪪 cards.html (Browse by Card Type)
+
+List all card types dynamically from JSON
+
+On clicking a card type:
+
+Show all people who have that card
+
+Clicking a person opens the PDF in a new tab
+
+👨‍👩‍👧 people.html (Browse by People)
+
+List all people from JSON
+
+Clicking a person:
+
+Show all cards they have
+
+Clicking a card opens the PDF in new tab
+
+➕ Management Features (IMPORTANT)
+
+Implement simple UI forms (or prompt-based inputs) to:
+
+People
+
+Add new person
+
+Delete existing person
+
+Cards
+
+Add card to a person
+
+Remove card from a person
+
+⚠️ When adding a card:
+
+User provides card type
+
+User provides PDF filename
+
+PDF must be assumed to exist inside correct folder
+
+📜 Rules
+
+❌ No frameworks (React, Vue, etc.)
+
+❌ No images
+
+❌ No backend
+
+✅ Clean UI
+
+✅ Modular JS
+
+✅ Fully dynamic from JSON
+
+✅ Easy to extend with new card types
+
+📖 README.md
+
+Explain:
+
+How to add PDFs
+
+How to add new card types
+
+How data.json works
+
+How to run the project
+
+🎯 Final Expectation
+
+Deliver:
+
+Fully working app
+
+Clean, readable code
+
+Proper comments
+
+No broken links
+
+No hardcoded data
