@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "cross-env NODE_ENV=development DATABASE_URL=postgresql://postgres:Wa12si34@localhost:5432/govt_cards tsx watch server/index.ts",
     "build": "tsx script/build.ts",
