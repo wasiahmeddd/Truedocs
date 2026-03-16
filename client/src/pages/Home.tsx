@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CryptoWalletDrawer } from "@/components/CryptoWalletDrawer";
 import { ShieldCheck } from "lucide-react";
+import { TransferAllDataCard } from "@/components/TransferAllDataCard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,6 +136,9 @@ export default function Home() {
             </motion.div>
           </Link>
 
+          <motion.div variants={item}>
+            <TransferAllDataCard />
+          </motion.div>
 
 
           <CryptoWalletDrawer>

@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import express from 'express';
-import { insertCryptoWalletSchema } from "@shared/schema";
+import { insertCryptoWalletSchema, customCardTypes, cryptoWallets, people, transferRequests, users } from "@shared/schema";
 import path from 'path';
 import multer from 'multer';
 import fs from 'fs';
@@ -14,6 +14,8 @@ import { setupAuth, requireAdmin } from './auth';
 import bcrypt from 'bcryptjs';
 import rateLimit from "express-rate-limit";
 import archiver from 'archiver';
+import { db } from "./db";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 const upload = multer({
   storage: multer.memoryStorage(), // Keep in memory to encrypt before writing
@@ -32,6 +34,11 @@ export async function registerRoutes(
     fs.mkdirSync(pdfPath);
   }
 
+  const transferBundleRoot = path.join(pdfPath, '_transfer_bundles');
+  if (!fs.existsSync(transferBundleRoot)) {
+    fs.mkdirSync(transferBundleRoot);
+  }
+
   // Auth Middleware
   const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.session.authenticated) {
@@ -40,6 +47,12 @@ export async function registerRoutes(
       res.status(401).json({ message: "Unauthorized" });
     }
   };
+
+  const deriveSessionEncryptionKey = (password: string, salt: string) =>
+    crypto.scryptSync(password, salt, 32).toString('hex');
+
+  const transfersEnabled =
+    process.env.ENABLE_ACCOUNT_TRANSFER === "true" || process.env.NODE_ENV !== "production";
 
   // Login
   // Custom Progressive Rate Limiter
@@ -432,6 +445,451 @@ export async function registerRoutes(
     console.log("Migration complete.");
   }
 
+  // --- TRANSFER ROUTES (Send All Data) ---
+  app.post("/api/transfers/request", requireAuth, async (req, res) => {
+    if (!transfersEnabled) return res.status(403).json({ message: "Transfers are disabled" });
+
+    const bodySchema = z.object({
+      toUsername: z.string().min(1),
+      confirmPassword: z.string().min(1),
+      moveWallets: z.boolean().optional().default(true),
+      moveCardTypes: z.boolean().optional().default(true),
+    });
+
+    try {
+      const input = bodySchema.parse(req.body);
+
+      const fromUser = await storage.getUser(req.user!.id);
+      if (!fromUser) return res.status(401).json({ message: "User not found" });
+
+      if (fromUser.username === input.toUsername) {
+        return res.status(400).json({ message: "Receiver must be a different user" });
+      }
+
+      const toUser = await storage.getUserByUsername(input.toUsername);
+      if (!toUser) return res.status(404).json({ message: "Receiver user not found" });
+
+      const passOk = await bcrypt.compare(input.confirmPassword, fromUser.password);
+      if (!passOk) return res.status(401).json({ message: "Incorrect password" });
+
+      const sessionKey = (req.session as any).encryptionKey as string | undefined;
+      if (!sessionKey) return res.status(401).json({ message: "Session expired" });
+
+      if (!toUser.keyPublic) {
+        return res.status(500).json({ message: "Receiver key not initialized. Ask receiver to login once." });
+      }
+
+      const transferKey = crypto.randomBytes(32); // random bytes, not derived from any password
+      const wrapped = crypto.publicEncrypt(
+        {
+          key: toUser.keyPublic,
+          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: "sha256",
+        },
+        transferKey
+      );
+      const transferKeyWrapped = wrapped.toString("base64");
+
+      const [created] = await db
+        .insert(transferRequests)
+        .values({
+          fromUserId: fromUser.id,
+          toUserId: toUser.id,
+          status: "pending",
+          transferKeyWrapped,
+        })
+        .returning();
+
+      const bundleDir = path.join(transferBundleRoot, String(created.id));
+      if (!fs.existsSync(bundleDir)) fs.mkdirSync(bundleDir, { recursive: true });
+
+      const fromPeople = await storage.getPeople(fromUser.id);
+      const allCards = fromPeople.flatMap(p => p.cards);
+
+      const manifest = {
+        requestId: created.id,
+        fromUserId: fromUser.id,
+        toUserId: toUser.id,
+        createdAt: new Date().toISOString(),
+        moveWallets: input.moveWallets,
+        moveCardTypes: input.moveCardTypes,
+        cards: allCards.map(c => ({ id: c.id, filename: c.filename })),
+      };
+      fs.writeFileSync(path.join(bundleDir, "manifest.json"), JSON.stringify(manifest, null, 2));
+
+      for (const card of allCards) {
+        const srcPath = path.join(pdfPath, card.filename);
+        if (!fs.existsSync(srcPath)) {
+          await db.update(transferRequests).set({ status: "failed", error: `Missing file: ${card.filename}` }).where(eq(transferRequests.id, created.id));
+          return res.status(404).json({ message: `Missing file for card ${card.id}: ${card.filename}` });
+        }
+
+        const raw = fs.readFileSync(srcPath, "utf8");
+        let plainBuffer: Buffer;
+
+        try {
+          const encryptedData = JSON.parse(raw);
+          plainBuffer = decrypt(encryptedData, sessionKey);
+        } catch {
+          try {
+            const encryptedData = JSON.parse(raw);
+            plainBuffer = decrypt(encryptedData, "choudhary");
+          } catch {
+            await db.update(transferRequests).set({ status: "failed", error: `Decrypt failed for ${card.filename}` }).where(eq(transferRequests.id, created.id));
+            return res.status(400).json({ message: `Could not decrypt card ${card.id}. Transfer request aborted.` });
+          }
+        }
+
+        const bundled = encrypt(plainBuffer, transferKey.toString("hex"));
+        fs.writeFileSync(path.join(bundleDir, card.filename), JSON.stringify(bundled));
+      }
+
+      res.json({
+        success: true,
+        request: {
+          id: created.id,
+          status: created.status,
+          toUsername: toUser.username,
+          createdAt: created.createdAt,
+        },
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid request body" });
+      }
+      // Help debugging in dev: surface the real error message (missing table, env var, etc.)
+      const anyErr = err as any;
+      console.error("Transfer request failed:", anyErr);
+      if (process.env.NODE_ENV !== "production") {
+        const msg =
+          anyErr?.message ||
+          (typeof anyErr === "string" ? anyErr : "Transfer request failed");
+        const code = anyErr?.code;
+        // Common Postgres error code for missing relation/table
+        if (code === "42P01") {
+          return res.status(500).json({
+            message: `${msg} (DB table missing: run 'npm run db:push' and restart the server)`,
+          });
+        }
+        return res.status(500).json({ message: msg });
+      }
+      res.status(500).json({ message: "Transfer request failed" });
+    }
+  });
+
+  app.get("/api/transfers/incoming", requireAuth, async (req, res) => {
+    if (!transfersEnabled) return res.status(403).json({ message: "Transfers are disabled" });
+
+    const incoming = await db
+      .select()
+      .from(transferRequests)
+      .where(and(eq(transferRequests.toUserId, req.user!.id), eq(transferRequests.status, "pending")))
+      .orderBy(desc(transferRequests.id));
+
+    const fromIds = Array.from(new Set(incoming.map(r => r.fromUserId)));
+    const fromUsers = fromIds.length
+      ? await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, fromIds))
+      : [];
+    const fromMap = new Map(fromUsers.map(u => [u.id, u.username]));
+
+    res.json(incoming.map(r => ({
+      id: r.id,
+      fromUserId: r.fromUserId,
+      fromUsername: fromMap.get(r.fromUserId) || "unknown",
+      createdAt: r.createdAt,
+    })));
+  });
+
+  app.get("/api/transfers/outgoing", requireAuth, async (req, res) => {
+    if (!transfersEnabled) return res.status(403).json({ message: "Transfers are disabled" });
+
+    const outgoing = await db
+      .select()
+      .from(transferRequests)
+      .where(eq(transferRequests.fromUserId, req.user!.id))
+      .orderBy(desc(transferRequests.id));
+
+    const toIds = Array.from(new Set(outgoing.map(r => r.toUserId)));
+    const toUsers = toIds.length
+      ? await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, toIds))
+      : [];
+    const toMap = new Map(toUsers.map(u => [u.id, u.username]));
+
+    res.json(outgoing.map(r => ({
+      id: r.id,
+      toUserId: r.toUserId,
+      toUsername: toMap.get(r.toUserId) || "unknown",
+      status: r.status,
+      createdAt: r.createdAt,
+      respondedAt: r.respondedAt,
+      completedAt: r.completedAt,
+      error: r.error,
+    })));
+  });
+
+  app.post("/api/transfers/:id/reject", requireAuth, async (req, res) => {
+    if (!transfersEnabled) return res.status(403).json({ message: "Transfers are disabled" });
+
+    const id = Number(req.params.id);
+    const existing = await db.select().from(transferRequests).where(eq(transferRequests.id, id)).then(r => r[0]);
+    if (!existing) return res.status(404).json({ message: "Request not found" });
+    if (existing.toUserId !== req.user!.id) return res.status(403).json({ message: "Forbidden" });
+    if (existing.status !== "pending") return res.status(400).json({ message: "Request is not pending" });
+
+    await db.update(transferRequests).set({ status: "rejected", respondedAt: new Date() }).where(eq(transferRequests.id, id));
+    res.json({ success: true });
+  });
+
+  app.post("/api/transfers/:id/accept", requireAuth, async (req, res) => {
+    if (!transfersEnabled) return res.status(403).json({ message: "Transfers are disabled" });
+
+    const id = Number(req.params.id);
+    const existing = await db.select().from(transferRequests).where(eq(transferRequests.id, id)).then(r => r[0]);
+    if (!existing) return res.status(404).json({ message: "Request not found" });
+    if (existing.toUserId !== req.user!.id) return res.status(403).json({ message: "Forbidden" });
+    if (existing.status !== "pending") return res.status(400).json({ message: "Request is not pending" });
+
+    const targetSessionKey = (req.session as any).encryptionKey as string | undefined;
+    if (!targetSessionKey) return res.status(401).json({ message: "Session expired" });
+
+    const bundleDir = path.join(transferBundleRoot, String(existing.id));
+    const manifestPath = path.join(bundleDir, "manifest.json");
+    if (!fs.existsSync(manifestPath)) {
+      await db.update(transferRequests).set({ status: "failed", error: "Missing manifest" }).where(eq(transferRequests.id, id));
+      return res.status(404).json({ message: "Transfer bundle missing" });
+    }
+
+    const privateKeyPem = (req.session as any).privateKeyPem as string | undefined;
+    if (!privateKeyPem) {
+      await db.update(transferRequests).set({ status: "failed", error: "Missing receiver private key in session" }).where(eq(transferRequests.id, id));
+      return res.status(401).json({ message: "Session expired (missing key). Please login again." });
+    }
+
+    let transferKeyHex: string;
+    try {
+      const wrapped = Buffer.from(existing.transferKeyWrapped, "base64");
+      const transferKey = crypto.privateDecrypt(
+        {
+          key: privateKeyPem,
+          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: "sha256",
+        },
+        wrapped
+      );
+      transferKeyHex = transferKey.toString("hex");
+    } catch (e) {
+      await db.update(transferRequests).set({ status: "failed", error: "Could not unwrap transfer key" }).where(eq(transferRequests.id, id));
+      return res.status(500).json({ message: "Transfer key unwrap failed" });
+    }
+
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      moveWallets?: boolean;
+      moveCardTypes?: boolean;
+      cards: Array<{ id: number; filename: string }>;
+    };
+
+    try {
+      // Re-encrypt actual stored files to target user's session key
+      for (const c of manifest.cards || []) {
+        const bundleFile = path.join(bundleDir, c.filename);
+        const dstFile = path.join(pdfPath, c.filename);
+        if (!fs.existsSync(bundleFile)) {
+          throw new Error(`Missing bundled file: ${c.filename}`);
+        }
+
+        const raw = fs.readFileSync(bundleFile, "utf8");
+        const encryptedData = JSON.parse(raw);
+        const plainBuffer = decrypt(encryptedData, transferKeyHex);
+        const reEncrypted = encrypt(plainBuffer, targetSessionKey);
+        fs.writeFileSync(dstFile, JSON.stringify(reEncrypted));
+      }
+
+      await db.transaction(async (tx) => {
+        await tx.update(people).set({ userId: existing.toUserId }).where(eq(people.userId, existing.fromUserId));
+
+        if (manifest.moveCardTypes !== false) {
+          await tx
+            .update(customCardTypes)
+            .set({ userId: existing.toUserId })
+            .where(eq(customCardTypes.userId, existing.fromUserId));
+        }
+
+        if (manifest.moveWallets !== false) {
+          await tx
+            .update(cryptoWallets)
+            .set({ userId: existing.toUserId })
+            .where(eq(cryptoWallets.userId, existing.fromUserId));
+        }
+
+        await tx
+          .update(transferRequests)
+          .set({ status: "completed", respondedAt: new Date(), completedAt: new Date(), error: null })
+          .where(eq(transferRequests.id, existing.id));
+      });
+
+      // Cleanup bundle
+      try {
+        fs.rmSync(bundleDir, { recursive: true, force: true });
+      } catch { }
+
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("Transfer accept failed:", e);
+      await db.update(transferRequests).set({ status: "failed", error: String(e?.message || e) }).where(eq(transferRequests.id, id));
+      res.status(500).json({ message: "Accept failed" });
+    }
+  });
+
+  // --- DEV ROUTES ---
+  app.post("/api/dev/transfer-account-data", requireAuth, async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ message: "Disabled in production" });
+    }
+
+    const configuredSecret = process.env.DEV_TRANSFER_SECRET;
+    if (!configuredSecret) {
+      return res.status(500).json({ message: "DEV_TRANSFER_SECRET is not configured" });
+    }
+
+    const headerSecret = req.header("x-dev-transfer-secret");
+    if (headerSecret !== configuredSecret) {
+      return res.status(403).json({ message: "Invalid dev transfer secret" });
+    }
+
+    const bodySchema = z.object({
+      fromUsername: z.string().min(1),
+      fromPassword: z.string().min(1),
+      toUsername: z.string().min(1),
+      toPassword: z.string().min(1),
+      dryRun: z.boolean().optional().default(false),
+      moveWallets: z.boolean().optional().default(true),
+      moveCardTypes: z.boolean().optional().default(true),
+    });
+
+    try {
+      const input = bodySchema.parse(req.body);
+
+      if (input.fromUsername === input.toUsername) {
+        return res.status(400).json({ message: "Source and target users must be different" });
+      }
+
+      if (!req.user?.isAdmin && req.user?.username !== input.fromUsername) {
+        return res.status(403).json({ message: "You can only transfer from your own account" });
+      }
+
+      const fromUser = await storage.getUserByUsername(input.fromUsername);
+      const toUser = await storage.getUserByUsername(input.toUsername);
+
+      if (!fromUser || !toUser) {
+        return res.status(404).json({ message: "Source or target user not found" });
+      }
+
+      const [fromPassOk, toPassOk] = await Promise.all([
+        bcrypt.compare(input.fromPassword, fromUser.password),
+        bcrypt.compare(input.toPassword, toUser.password),
+      ]);
+
+      if (!fromPassOk) return res.status(401).json({ message: "Invalid source credentials" });
+      if (!toPassOk) return res.status(401).json({ message: "Invalid target credentials" });
+
+      const sourceKey = deriveSessionEncryptionKey(input.fromPassword, fromUser.salt);
+      const targetKey = deriveSessionEncryptionKey(input.toPassword, toUser.salt);
+
+      const fromPeople = await storage.getPeople(fromUser.id);
+      const allCards = fromPeople.flatMap(p => p.cards);
+
+      const [sourceCardTypes, sourceWallets] = await Promise.all([
+        db.select().from(customCardTypes).where(eq(customCardTypes.userId, fromUser.id)),
+        db.select().from(cryptoWallets).where(eq(cryptoWallets.userId, fromUser.id)),
+      ]);
+
+      const summary = {
+        sourceUserId: fromUser.id,
+        targetUserId: toUser.id,
+        peopleToMove: fromPeople.length,
+        cardsToReEncrypt: allCards.length,
+        cardTypesToMove: input.moveCardTypes ? sourceCardTypes.length : 0,
+        walletsToMove: input.moveWallets ? sourceWallets.length : 0,
+      };
+
+      if (input.dryRun) {
+        return res.json({
+          success: true,
+          dryRun: true,
+          summary,
+          message: "Dry run complete. No data changed.",
+        });
+      }
+
+      const rewrittenFiles: Array<{ filePath: string; payload: string }> = [];
+      for (const card of allCards) {
+        const filePath = path.join(pdfPath, card.filename);
+        if (!fs.existsSync(filePath)) {
+          return res.status(404).json({ message: `Missing file for card ${card.id}: ${card.filename}` });
+        }
+
+        const raw = fs.readFileSync(filePath, 'utf8');
+        let plainBuffer: Buffer;
+
+        try {
+          const encryptedData = JSON.parse(raw);
+          plainBuffer = decrypt(encryptedData, sourceKey);
+        } catch {
+          try {
+            const encryptedData = JSON.parse(raw);
+            plainBuffer = decrypt(encryptedData, "choudhary");
+          } catch {
+            return res.status(400).json({
+              message: `Could not decrypt file for card ${card.id}. Transfer aborted.`,
+            });
+          }
+        }
+
+        const reEncrypted = encrypt(plainBuffer, targetKey);
+        rewrittenFiles.push({
+          filePath,
+          payload: JSON.stringify(reEncrypted),
+        });
+      }
+
+      for (const file of rewrittenFiles) {
+        fs.writeFileSync(file.filePath, file.payload);
+      }
+
+      await db.transaction(async (tx) => {
+        await tx.update(people).set({ userId: toUser.id }).where(eq(people.userId, fromUser.id));
+
+        if (input.moveCardTypes) {
+          await tx
+            .update(customCardTypes)
+            .set({ userId: toUser.id })
+            .where(eq(customCardTypes.userId, fromUser.id));
+        }
+
+        if (input.moveWallets) {
+          await tx
+            .update(cryptoWallets)
+            .set({ userId: toUser.id })
+            .where(eq(cryptoWallets.userId, fromUser.id));
+        }
+      });
+
+      res.json({
+        success: true,
+        dryRun: false,
+        summary,
+        message: "Transfer complete",
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid request body" });
+      }
+
+      console.error("Dev transfer failed:", err);
+      res.status(500).json({ message: "Transfer failed" });
+    }
+  });
+
 
   // --- ADMIN ROUTES ---
   app.get("/api/admin/stats", requireAdmin, async (req, res) => {
@@ -625,4 +1083,3 @@ export async function registerRoutes(
 
   return httpServer;
 }
-

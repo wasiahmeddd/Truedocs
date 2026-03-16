@@ -2,9 +2,24 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
+import fs from "fs";
 
 const app = express();
-const httpServer = createServer(app);
+
+const sslKeyPath = process.env.SSL_KEY_PATH;
+const sslCertPath = process.env.SSL_CERT_PATH;
+const sslEnabled = Boolean(sslKeyPath && sslCertPath && fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath));
+
+const httpServer = sslEnabled
+  ? createHttpsServer(
+      {
+        key: fs.readFileSync(sslKeyPath as string),
+        cert: fs.readFileSync(sslCertPath as string),
+      },
+      app,
+    )
+  : createServer(app);
 
 declare module "http" {
   interface IncomingMessage {

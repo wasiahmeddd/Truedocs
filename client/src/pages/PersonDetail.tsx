@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { usePerson, usePeople } from "@/hooks/use-people";
 import { shareContent } from "@/lib/share-util";
+import { useToast } from "@/hooks/use-toast";
 import { AddCardDialog } from "@/components/AddCardDialog";
 import { CardItem } from "@/components/CardItem";
 import { Button } from "@/components/ui/button";
@@ -42,10 +43,36 @@ export default function PersonDetail() {
   const cachedPerson = allPeople?.find(p => p.id === id);
   const person = personFromFetch || cachedPerson;
   const [direction, setDirection] = useState(lastDirection);
+  const { toast } = useToast();
 
   const handleDisplayDirection = (dir: number) => {
     lastDirection = dir;
     setDirection(dir);
+  };
+
+  const handleShareAll = async () => {
+    if (!person) return;
+    const result = await shareContent(
+      `/api/people/${person.id}/export`,
+      `${person.name}_cards.zip`,
+      "Export Cards",
+      "Sharing all cards"
+    );
+    if (result.status === "copied") {
+      toast({ title: "Link copied", description: "Share link copied to clipboard." });
+    } else if (result.status === "unsupported") {
+      toast({
+        title: "Sharing not available",
+        description: "Native sharing on mobile requires HTTPS. Open the app over https:// and try again.",
+        variant: "destructive",
+      });
+    } else if (result.status === "error") {
+      toast({
+        title: "Share failed",
+        description: "Unable to open the share sheet. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Calculate Prev/Next
@@ -138,7 +165,7 @@ export default function PersonDetail() {
                   </div>
                   <div className="pl-2 flex gap-2">
                     <AddCardDialog personId={person.id} />
-                    <Button variant="outline" size="icon" onClick={() => shareContent(`/api/people/${person.id}/export`, `${person.name}_cards.zip`, "Export Cards", "Sharing all cards")} title="Export/Share All Cards">
+                    <Button variant="outline" size="icon" onClick={handleShareAll} title="Export/Share All Cards">
                       <Share2 className="h-4 w-4" />
                     </Button>
                   </div>

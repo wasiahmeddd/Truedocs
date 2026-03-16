@@ -9,6 +9,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from 'crypto';
 import MemoryStore from "memorystore";
+import { encrypt, decrypt } from "./encryption";
 
 declare global {
     namespace Express {
@@ -20,6 +21,7 @@ declare module 'express-session' {
     interface SessionData {
         authenticated: boolean; // Keep for legacy compatibility if needed
         encryptionKey: string; // The derived key for file encryption
+        privateKeyPem?: string; // Decrypted user private key (in-memory session only)
     }
 }
 
@@ -98,8 +100,63 @@ export function setupAuth(app: Express) {
         return crypto.scryptSync(password, salt, 32).toString('hex');
     }
 
+    function deriveKeyEncryptionKey(password: string, keySalt: string) {
+        // Separate derivation for encrypting the user's private key at rest
+        return crypto.scryptSync(password, keySalt, 32).toString('hex');
+    }
+
+    function ensureUserKeypair(user: any, plainPassword: string) {
+        if (user.keyPublic && user.keyPrivateEncrypted && user.keySalt) return user;
+
+        // Generate RSA keypair for wrapping transfer keys
+        const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+            modulusLength: 3072,
+            publicKeyEncoding: { type: "spki", format: "pem" },
+            privateKeyEncoding: { type: "pkcs8", format: "pem" },
+        });
+
+        const keySalt = crypto.randomBytes(16).toString("hex");
+        const kek = deriveKeyEncryptionKey(plainPassword, keySalt);
+        const privateEnc = encrypt(Buffer.from(privateKey, "utf8"), kek);
+
+        return {
+            ...user,
+            keyPublic: publicKey,
+            keyPrivateEncrypted: JSON.stringify(privateEnc),
+            keySalt,
+        };
+    }
+
+    function decryptUserPrivateKey(user: any, plainPassword: string): string {
+        if (!user.keyPrivateEncrypted || !user.keySalt) {
+            throw new Error("User key material missing");
+        }
+        const kek = deriveKeyEncryptionKey(plainPassword, user.keySalt);
+        const encObj = JSON.parse(user.keyPrivateEncrypted);
+        return decrypt(encObj, kek).toString("utf8");
+    }
+
     app.post("/api/register", async (req, res, next) => {
         try {
+            // Anti-bruteforce for registration (in-memory)
+            const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.ip || "unknown";
+            (globalThis as any).__registerAttempts ??= new Map<string, { count: number; resetAt: number }>();
+            const reg: Map<string, { count: number; resetAt: number }> = (globalThis as any).__registerAttempts;
+            const now = Date.now();
+            const windowMs = 60 * 60 * 1000; // 1 hour
+            const limit = 5;
+            const st = reg.get(ip) || { count: 0, resetAt: now + windowMs };
+            if (st.resetAt < now) {
+                st.count = 0;
+                st.resetAt = now + windowMs;
+            }
+            st.count += 1;
+            reg.set(ip, st);
+            if (st.count > limit) {
+                const retryAfterSec = Math.ceil((st.resetAt - now) / 1000);
+                return res.status(429).json({ message: `Too many registrations. Try again in ${retryAfterSec}s.` });
+            }
+
             if (!req.body.username || !req.body.password) {
                 return res.status(400).send("Username and password are required");
             }
@@ -112,22 +169,40 @@ export function setupAuth(app: Express) {
             const hashedPassword = await bcrypt.hash(req.body.password, 10);
             const salt = crypto.randomBytes(16).toString('hex');
 
-            const user = await storage.createUser({
+            // Create user with key material
+            const baseUser = await storage.createUser({
                 username: req.body.username,
                 password: hashedPassword,
                 salt: salt
             });
 
-            req.login(user, (err) => {
+            const withKeys = ensureUserKeypair(baseUser as any, req.body.password);
+            // Persist key material if it was newly created
+            if (
+                (baseUser as any).keyPublic !== withKeys.keyPublic ||
+                (baseUser as any).keyPrivateEncrypted !== withKeys.keyPrivateEncrypted ||
+                (baseUser as any).keySalt !== withKeys.keySalt
+            ) {
+                await storage.updateUser((baseUser as any).id, {
+                    keyPublic: withKeys.keyPublic,
+                    keyPrivateEncrypted: withKeys.keyPrivateEncrypted,
+                    keySalt: withKeys.keySalt,
+                } as any);
+            }
+
+            req.login(baseUser as any, (err) => {
                 if (err) return next(err);
 
                 // Set encryption key in session
                 const key = deriveEncryptionKey(req.body.password, salt);
                 req.session.encryptionKey = key;
                 req.session.authenticated = true;
+                try {
+                    req.session.privateKeyPem = decryptUserPrivateKey(withKeys, req.body.password);
+                } catch { }
                 req.session.save((err) => {
                     if (err) return next(err);
-                    res.json({ success: true, user: { id: user.id, username: user.username, isAdmin: user.isAdmin } });
+                    res.json({ success: true, user: { id: (baseUser as any).id, username: (baseUser as any).username, isAdmin: (baseUser as any).isAdmin } });
                 });
             });
         } catch (err) {
@@ -136,10 +211,32 @@ export function setupAuth(app: Express) {
     });
 
     app.post("/api/auth/login", (req, res, next) => {
+        // Simple anti-bruteforce (in-memory). Strong enough for a single-node deployment.
+        const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.ip || "unknown";
+        const username = String(req.body?.username || "");
+        const key = `${ip}::${username}`;
+        const now = Date.now();
+        (globalThis as any).__loginAttempts ??= new Map<string, { fails: number; lockUntil: number }>();
+        const attempts: Map<string, { fails: number; lockUntil: number }> = (globalThis as any).__loginAttempts;
+        const state = attempts.get(key) || { fails: 0, lockUntil: 0 };
+        if (state.lockUntil > now) {
+            const retryAfterSec = Math.ceil((state.lockUntil - now) / 1000);
+            return res.status(429).json({ message: `Too many attempts. Try again in ${retryAfterSec}s.` });
+        }
+
         passport.authenticate("local", (err: any, user: SelectUser, info: any) => {
             console.log("Auth attempt:", { err, user, info });
             if (err) return next(err);
-            if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
+            if (!user) {
+                const nextFails = state.fails + 1;
+                // Progressive lockout: after 5 fails, lock for 60s, after 8 for 5m, after 12 for 30m
+                let lockForMs = 0;
+                if (nextFails >= 12) lockForMs = 30 * 60 * 1000;
+                else if (nextFails >= 8) lockForMs = 5 * 60 * 1000;
+                else if (nextFails >= 5) lockForMs = 60 * 1000;
+                attempts.set(key, { fails: nextFails, lockUntil: lockForMs ? now + lockForMs : 0 });
+                return res.status(401).json({ message: info?.message || "Invalid credentials" });
+            }
 
             if (user.isBanned) {
                 return res.status(403).json({ message: "This account is banned. Contact wasiahemadchoudhary@gmail.com" });
@@ -154,8 +251,27 @@ export function setupAuth(app: Express) {
 
                 req.session.encryptionKey = key;
                 req.session.authenticated = true;
+                try {
+                    // Ensure keypair exists (backfill for older users) and load decrypted private key into session
+                    const withKeys = ensureUserKeypair(user as any, password);
+                    if (
+                        (user as any).keyPublic !== withKeys.keyPublic ||
+                        (user as any).keyPrivateEncrypted !== withKeys.keyPrivateEncrypted ||
+                        (user as any).keySalt !== withKeys.keySalt
+                    ) {
+                        storage.updateUser((user as any).id, {
+                            keyPublic: withKeys.keyPublic,
+                            keyPrivateEncrypted: withKeys.keyPrivateEncrypted,
+                            keySalt: withKeys.keySalt,
+                        } as any).catch(console.error);
+                    }
+                    req.session.privateKeyPem = decryptUserPrivateKey(withKeys, password);
+                } catch (e) {
+                    console.error("Failed to load user private key:", e);
+                }
                 req.session.save((err) => {
                     if (err) return next(err);
+                    attempts.delete(key); // successful login resets attempts
                     res.json({ success: true, user: { id: user.id, username: user.username, isAdmin: user.isAdmin } });
                 });
             });

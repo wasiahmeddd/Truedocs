@@ -58,6 +58,31 @@ export default function CardsByType() {
 
   const currentType = cardTypes?.find(t => t.slug === type);
 
+  const handleShareAll = async () => {
+    if (!type) return;
+    const result = await shareContent(
+      `/api/cards/type/${type}/export`,
+      `${type}_cards.zip`,
+      "Export Cards",
+      `Sharing all ${type} records`
+    );
+    if (result.status === "copied") {
+      toast({ title: "Link copied", description: "Share link copied to clipboard." });
+    } else if (result.status === "unsupported") {
+      toast({
+        title: "Sharing not available",
+        description: "Native sharing on mobile requires HTTPS. Open the app over https:// and try again.",
+        variant: "destructive",
+      });
+    } else if (result.status === "error") {
+      toast({
+        title: "Share failed",
+        description: "Unable to open the share sheet. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!currentType) return;
@@ -110,7 +135,7 @@ export default function CardsByType() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center">
-          <Button variant="outline" onClick={() => shareContent(`/api/cards/type/${type}/export`, `${type}_cards.zip`, "Export Cards", `Sharing all ${type} records`)} className="gap-2 flex-grow md:flex-grow-0 hidden md:flex">
+          <Button variant="outline" onClick={handleShareAll} className="gap-2 flex-grow md:flex-grow-0 hidden md:flex">
             <Share2 className="h-4 w-4" />
             Share All
           </Button>
@@ -128,7 +153,7 @@ export default function CardsByType() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => shareContent(`/api/cards/type/${type}/export`, `${type}_cards.zip`, "Export Cards", `Sharing all ${type} records`)}>
+                <DropdownMenuItem onClick={handleShareAll}>
                   <Share2 className="mr-2 h-4 w-4" /> Share All
                 </DropdownMenuItem>
                 {currentType && (

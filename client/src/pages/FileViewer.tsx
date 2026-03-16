@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, FileX, Loader2, Share2, Download, ExternalLink } from "lucide-react";
 import { useState, useEffect } from "react";
 import { shareContent } from "@/lib/share-util";
+import { useToast } from "@/hooks/use-toast";
 
 export default function FileViewer() {
     const [, params] = useRoute("/view/:id");
@@ -11,6 +12,27 @@ export default function FileViewer() {
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const { toast } = useToast();
+
+    const handleShare = async () => {
+        if (!id) return;
+        const result = await shareContent(`/api/file/${id}`, `document_${id}.pdf`, "Share Document");
+        if (result.status === "copied") {
+            toast({ title: "Link copied", description: "Share link copied to clipboard." });
+        } else if (result.status === "unsupported") {
+            toast({
+                title: "Sharing not available",
+                description: "Native sharing on mobile requires HTTPS. Open the app over https:// and try again.",
+                variant: "destructive",
+            });
+        } else if (result.status === "error") {
+            toast({
+                title: "Share failed",
+                description: "Unable to open the share sheet. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
     useEffect(() => {
         if (!id) return;
@@ -74,7 +96,7 @@ export default function FileViewer() {
                 <span className="font-semibold text-lg hidden md:block">Document Viewer</span>
 
                 <div className="ml-auto flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => blobUrl && shareContent(blobUrl, `document_${id}.pdf`, "Share Document")}>
+                    <Button variant="outline" size="sm" onClick={handleShare}>
                         <Share2 className="h-4 w-4 mr-2" />
                         Share
                     </Button>

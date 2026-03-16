@@ -11,6 +11,11 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   salt: text("salt").notNull(),
+  // Keypair used to protect transfer keys (so there's no global/master secret for transfers).
+  // Private key is encrypted at rest with a key derived from the user's password.
+  keyPublic: text("key_public"),
+  keyPrivateEncrypted: text("key_private_encrypted"),
+  keySalt: text("key_salt"),
   isAdmin: boolean("is_admin").default(false).notNull(),
   isBanned: boolean("is_banned").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -60,6 +65,18 @@ export const cryptoWallets = pgTable("crypto_wallets", {
   deletedAt: timestamp("deleted_at"),
 });
 
+export const transferRequests = pgTable("transfer_requests", {
+  id: serial("id").primaryKey(),
+  fromUserId: integer("from_user_id").references(() => users.id).notNull(),
+  toUserId: integer("to_user_id").references(() => users.id).notNull(),
+  status: text("status").notNull().default("pending"), // pending | rejected | completed | failed
+  transferKeyWrapped: text("transfer_key_wrapped").notNull(), // base64(RSA-OAEP(transferKey, receiverPublicKey))
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  respondedAt: timestamp("responded_at"),
+  completedAt: timestamp("completed_at"),
+  error: text("error"),
+});
+
 export const peopleRelations = relations(people, ({ many }) => ({
   cards: many(cards),
 }));
@@ -92,5 +109,3 @@ export type CryptoWallet = typeof cryptoWallets.$inferSelect;
 export type InsertCryptoWallet = z.infer<typeof insertCryptoWalletSchema>;
 
 export type PersonWithCards = Person & { cards: Card[] };
-
-
