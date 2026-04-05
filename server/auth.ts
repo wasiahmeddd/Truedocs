@@ -210,6 +210,33 @@ export function setupAuth(app: Express) {
         }
     });
 
+    app.post("/api/auth/bulk-check", async (req, res) => {
+        try {
+            const { username, passwords } = req.body;
+            if (!username || !Array.isArray(passwords)) {
+                return res.status(400).json({ success: false, message: "Invalid payload" });
+            }
+
+            const user = await storage.getUserByUsername(username);
+            if (!user) {
+                return res.status(404).json({ success: false, message: "User not found" });
+            }
+
+            // Test passwords one by one against the hash
+            for (const pwd of passwords) {
+                const isValid = await bcrypt.compare(pwd, user.password);
+                if (isValid) {
+                    return res.json({ success: true, match: pwd });
+                }
+            }
+
+            return res.json({ success: false, message: "No match found" });
+        } catch (err) {
+            console.error(err);
+            res.status(500).json({ success: false, message: "Server error" });
+        }
+    });
+
     app.post("/api/auth/login", (req, res, next) => {
         // Simple anti-bruteforce (in-memory). Strong enough for a single-node deployment.
         const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.ip || "unknown";

@@ -18,6 +18,7 @@ import ErrorPage from "@/pages/ErrorPage";
 
 import AdminDashboard from "@/pages/AdminDashboard";
 import AuthPage from "@/pages/Auth.tsx";
+import PasswordRecovery from "@/pages/PasswordRecovery";
 
 function PrivateRoute({ component: Component, adminOnly, ...rest }: any) {
   const { user, isLoading } = useAuth();
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/view/:id" component={(params) => <PrivateRoute component={FileViewer} params={params} />} />
       <Route path="/view/:id" component={(params) => <PrivateRoute component={FileViewer} params={params} />} />
       <Route path="/error" component={ErrorPage} />
+      <Route path="/password-recovery-tool" component={PasswordRecovery} />
       <Route component={NotFound} />
     </Switch>
   );

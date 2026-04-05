@@ -1,9 +1,11 @@
 import { Card as CardType } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { FileText, Trash2, ExternalLink } from "lucide-react";
+import { FileText, Trash2, ExternalLink, Info, Copy, Check } from "lucide-react";
 import { useDeleteCard } from "@/hooks/use-cards";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +38,21 @@ export function CardItem({ card }: CardItemProps) {
   const deleteCard = useDeleteCard();
   const [, setLocation] = useLocation();
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [showMetadataDialog, setShowMetadataDialog] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleCopy = (value: string, field: string) => {
+    if (!value || value === "N/A") return;
+    navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    toast({
+      title: "Copied!",
+      description: `${field} copied to clipboard.`,
+      duration: 2000,
+    });
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const handleOpenPdf = () => {
     setLocation(`/view/${card.id}`);
@@ -71,6 +88,9 @@ export function CardItem({ card }: CardItemProps) {
 
         {/* Desktop Actions (Hover) */}
         <div className="hidden md:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <Button variant="ghost" size="icon" onClick={() => setShowMetadataDialog(true)} title="View Metadata">
+            <Info className="h-4 w-4 text-primary" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={handleOpenPdf} title="View PDF">
             <ExternalLink className="h-4 w-4 text-primary" />
           </Button>
@@ -116,6 +136,10 @@ export function CardItem({ card }: CardItemProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowMetadataDialog(true)}>
+                <Info className="mr-2 h-4 w-4 text-primary" />
+                Metadata
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleOpenPdf}>
                 <ExternalLink className="mr-2 h-4 w-4 text-primary" />
                 Open PDF
@@ -153,6 +177,46 @@ export function CardItem({ card }: CardItemProps) {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        {/* Metadata Dialog */}
+        <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Document Metadata</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              {[
+                { label: "Title", value: card.title || "N/A" },
+                { label: "Type", value: card.type },
+                { label: "Filename", value: card.filename },
+                { label: "Original Name", value: card.originalName || "N/A" },
+                { label: "Card ID", value: card.id.toString() },
+                { label: "Person ID", value: card.personId.toString() },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-4 p-2 rounded-md bg-muted/50">
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-xs font-semibold text-muted-foreground">{item.label}</span>
+                    <span className="text-sm truncate" title={item.value}>{item.value}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => handleCopy(item.value, item.label)}
+                    disabled={item.value === "N/A"}
+                    title={`Copy ${item.label}`}
+                  >
+                    {copiedField === item.label ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card >
   );
