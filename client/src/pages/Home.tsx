@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { CryptoWalletDrawer } from "@/components/CryptoWalletDrawer";
 import { ShieldCheck } from "lucide-react";
 import { TransferAllDataCard } from "@/components/TransferAllDataCard";
+import { Shield, Clock, Lock, IdCard as BadgeIcon, Plane, Home as HomeIcon, User, Settings } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,8 +40,9 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
-      {/* Abstract Background Elements */}
+    <>
+      <div className="hidden md:flex min-h-screen bg-background flex-col relative overflow-hidden">
+        {/* Abstract Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-accent/5 rounded-full blur-3xl"></div>
@@ -169,9 +171,121 @@ export default function Home() {
         </motion.div>
       </div>
 
-      <div className="fixed bottom-2 md:bottom-6 text-[10px] md:text-xs text-muted-foreground text-center w-full p-2">
+      <div className="fixed bottom-2 text-[10px] text-muted-foreground text-center w-full p-2">
         © {new Date().getFullYear()} Government Document Management System
       </div>
-    </div>
+      </div>
+
+      {/* --- NEW MOBILE UI (Visible only on small screens) --- */}
+      <div className="md:hidden flex flex-col min-h-screen bg-slate-950 text-slate-100 antialiased font-sans pb-24">
+        {/* TopAppBar */}
+        <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
+          <div className="flex items-center gap-3">
+            <Shield className="text-blue-400 h-6 w-6" />
+            <h1 className="font-bold tracking-[-0.02em] text-slate-100 text-lg uppercase">The Vault</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <ProfileDialog />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button className="text-slate-200 active:scale-95 transition-transform duration-200 hover:opacity-80 p-2">
+                  <LogOut className="h-5 w-5 text-red-400" />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Log out of Vault?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You will need to enter your credentials to access your documents again.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => logout()} className="bg-destructive hover:bg-destructive/90">
+                    Log Out
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </header>
+
+        <main className="pt-24 px-6 max-w-2xl mx-auto space-y-8 flex-1">
+          {/* Hero Status Section */}
+          <section className="space-y-2">
+            <p className="text-[10px] font-medium tracking-[0.05em] uppercase text-blue-400">Security Status: Encrypted</p>
+            <h2 className="font-semibold text-3xl tracking-tight text-slate-100">Welcome back, Curator.</h2>
+            <div className="w-12 h-1 bg-blue-400 rounded-full mt-4"></div>
+          </section>
+
+          {/* Bento Grid Main Actions */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Browse by People */}
+            <Link href="/people" className="col-span-2 block">
+              <div className="bg-slate-900 rounded-xl p-6 relative overflow-hidden group active:scale-[0.98] transition-all duration-200 border border-slate-800">
+                <div className="relative z-10 space-y-4">
+                  <Users className="text-blue-400 h-8 w-8" />
+                  <div>
+                    <h3 className="font-semibold text-xl text-slate-100">Browse by People</h3>
+                    <p className="text-slate-400 text-sm mt-1">Manage documents for all family members.</p>
+                  </div>
+                </div>
+                <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Users className="text-white h-32 w-32" />
+                </div>
+              </div>
+            </Link>
+
+            {/* Browse by Cards */}
+            <Link href="/cards" className="block">
+              <div className="bg-slate-800 rounded-xl p-6 relative flex flex-col justify-between aspect-square active:scale-[0.98] transition-all duration-200 border border-slate-700">
+                <CreditCard className="text-cyan-400 h-8 w-8" />
+                <div>
+                  <h3 className="font-semibold text-lg text-slate-100 leading-tight block">Browse Cards</h3>
+                  <p className="text-slate-400 text-[10px] mt-2 sm:text-xs">ID, Passports, DL</p>
+                </div>
+              </div>
+            </Link>
+
+            {/* Recent Activity / Small Insight */}
+            <div className="bg-slate-900 rounded-xl p-6 relative flex flex-col justify-between aspect-square border border-slate-800">
+              <Clock className="text-emerald-400 h-8 w-8" />
+              <div>
+                <span className="font-bold text-2xl text-slate-200">Secure</span>
+                <p className="text-slate-400 text-[10px] mt-1 sm:text-xs">Database Encrypted</p>
+              </div>
+            </div>
+
+            {/* Crypto Recovery Phrases */}
+            <div className="col-span-2">
+              <CryptoWalletDrawer>
+                <div className="bg-slate-800 w-full rounded-xl p-6 relative overflow-hidden border border-blue-500/20 active:scale-[0.98] transition-all duration-200 text-left">
+                  {/* Subtle glow effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-xl text-emerald-400">Crypto Seed Phrases</h3>
+                      <p className="text-slate-400 text-sm">Ultra-secure cold storage vault</p>
+                    </div>
+                    <div className="bg-emerald-900/30 p-3 rounded-full shrink-0">
+                      <Lock className="text-emerald-400 h-6 w-6" />
+                    </div>
+                  </div>
+                  <div className="mt-6 flex gap-2">
+                    <span className="px-3 py-1 bg-slate-950 text-[10px] font-medium uppercase tracking-wider text-emerald-400 rounded-full border border-slate-700">BIP-39 Standard</span>
+                    <span className="px-3 py-1 bg-slate-950 text-[10px] font-medium uppercase tracking-wider text-emerald-400 rounded-full border border-slate-700">AES-256</span>
+                  </div>
+                </div>
+              </CryptoWalletDrawer>
+            </div>
+            
+            <div className="col-span-2 mt-2">
+               <TransferAllDataCard />
+            </div>
+          </div>
+        </main>
+
+      </div>
+    </>
   );
 }

@@ -121,9 +121,9 @@ export default function AuthPage() {
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-950">
             {/* Animated Background Elements */}
-            <div className="absolute inset-0 w-full h-full">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-500/20 rounded-full blur-[100px] animate-pulse" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/20 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: "1s" }} />
+            <div className="absolute inset-0 w-full h-full pointer-events-none">
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[100px] animate-pulse" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-cyan-500/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: "1s" }} />
             </div>
 
             {/* Warning Modal (Serious Signup) */}
@@ -188,7 +188,7 @@ export default function AuthPage() {
                             initial={{ y: -20, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            className="mx-auto bg-gradient-to-tr from-purple-500 to-blue-500 p-3 rounded-2xl w-fit mb-4 shadow-lg shadow-purple-500/20"
+                            className="mx-auto bg-gradient-to-tr from-blue-500 to-cyan-500 p-3 rounded-2xl w-fit mb-4 shadow-lg shadow-blue-500/20"
                         >
                             <Lock className="w-8 h-8 text-white" />
                         </motion.div>
@@ -219,7 +219,7 @@ export default function AuthPage() {
                                     {activeTab === "login" && (
                                         <motion.div
                                             layoutId="active-pill"
-                                            className="absolute inset-0 bg-purple-500/20 rounded-md -z-10"
+                                            className="absolute inset-0 bg-blue-500/20 rounded-md -z-10"
                                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                         />
                                     )}
@@ -232,7 +232,7 @@ export default function AuthPage() {
                                     {activeTab === "register" && (
                                         <motion.div
                                             layoutId="active-pill"
-                                            className="absolute inset-0 bg-blue-500/20 rounded-md -z-10"
+                                            className="absolute inset-0 bg-cyan-500/20 rounded-md -z-10"
                                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                         />
                                     )}
@@ -310,7 +310,7 @@ export default function AuthPage() {
                                                 name="password"
                                                 type={showPassword ? "text" : "password"}
                                                 placeholder={activeTab === "login" ? "••••••••" : "Create a strong password"}
-                                                className="pl-10 pr-10 bg-white/5 border-white/10 focus:border-purple-500 transition-colors"
+                                                className="pl-10 pr-10 bg-white/5 border-white/10 focus:border-cyan-500 transition-colors"
                                                 required
                                             />
                                             <button
@@ -367,8 +367,8 @@ export default function AuthPage() {
                                     <Button
                                         type="submit"
                                         className={`w-full h-11 text-white shadow-lg transition-all duration-300 ${activeTab === "login"
-                                            ? "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-purple-900/20"
-                                            : "bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-blue-900/20"
+                                            ? "bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-cyan-900/20"
+                                            : "bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 shadow-emerald-900/20"
                                             }`}
                                         disabled={loginMutation.isPending || registerMutation.isPending}
                                     >

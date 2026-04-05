@@ -59,6 +59,7 @@ function Router() {
 
 
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { MobileNav } from "@/components/MobileNav";
 
 function App() {
   return (
@@ -68,6 +69,7 @@ function App() {
           <ThemeToggle />
           <Toaster />
           <Router />
+          <MobileNav />
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

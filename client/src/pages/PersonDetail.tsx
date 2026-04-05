@@ -91,8 +91,11 @@ export default function PersonDetail() {
     </div>
   );
 
+  if (!person) return null; // Add Type guard for TS
+
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <>
+    <div className="hidden md:block min-h-screen bg-background p-4 md:p-8">
       {/* Navigation Arrows (Fixed to Sides) */}
       <Link href={prevPerson ? `/people/${prevPerson.id}` : "#"}>
         <Button
@@ -207,6 +210,118 @@ export default function PersonDetail() {
         </AnimatePresence>
       </div>
     </div>
+
+    {/* MOBILE UI */}
+    <div className="md:hidden flex flex-col min-h-screen bg-slate-950 text-slate-100 antialiased font-sans pb-24 overflow-x-hidden">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
+        <div className="flex items-center gap-3">
+          <Link href="/people">
+            <button className="text-slate-200 active:scale-95 transition-transform duration-200 hover:opacity-80 p-2 -ml-2">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          </Link>
+          <h1 className="font-bold tracking-[-0.02em] text-slate-100 text-base uppercase">Profile</h1>
+        </div>
+        <div className="flex items-center gap-2">
+           <EditPersonDialog person={person} />
+        </div>
+      </header>
+      
+      <main className="pt-20 px-4 space-y-6 flex-1 relative">
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={person.id}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: "spring", stiffness: 300, damping: 30 },
+              opacity: { duration: 0.2 }
+            }}
+            className="space-y-6"
+          >
+            {/* Person Card Header */}
+            <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 relative overflow-hidden flex flex-col items-center text-center">
+              {/* Background gradient blur */}
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl"></div>
+              
+              <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-emerald-500/20 flex items-center justify-center border border-slate-700/50 mb-4 shadow-inner relative z-10">
+                <span className="text-3xl font-bold bg-gradient-to-br from-slate-100 to-slate-400 bg-clip-text text-transparent">{person.name.charAt(0).toUpperCase()}</span>
+              </div>
+              
+              <h2 className="text-2xl font-bold text-slate-100 relative z-10">{person.name}</h2>
+              <div className="flex items-center gap-1.5 text-slate-400 text-xs mt-1 bg-slate-950/50 px-2.5 py-1 rounded-md relative z-10">
+                <User className="h-3 w-3" />
+                <span>ID: #{person.id.toString().padStart(4, '0')}</span>
+              </div>
+
+              <div className="flex items-center gap-3 mt-6 w-full relative z-10">
+                <div className="flex-1 bg-slate-950/50 py-3 rounded-xl border border-slate-800/80">
+                  <div className="text-xl font-bold text-slate-200">{person.cards.length}</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Documents</div>
+                </div>
+                <Button variant="outline" size="icon" onClick={handleShareAll} className="h-[52px] w-[52px] rounded-xl border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white shrink-0">
+                  <Share2 className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <h3 className="text-[10px] font-medium tracking-[0.05em] uppercase text-cyan-400">Vault Documents</h3>
+                <AddCardDialog personId={person.id} />
+              </div>
+
+              {person.cards.length === 0 ? (
+                <div className="text-center py-12 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800 mt-2">
+                  <FolderOpen className="h-10 w-10 mx-auto text-slate-600 mb-3" />
+                  <p className="text-slate-400 text-sm">No documents stored.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {person.cards.map((card, index) => (
+                    <motion.div
+                      key={card.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <CardItem card={card} />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Nav Arrows inside the view */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
+               <Link href={prevPerson ? `/people/${prevPerson.id}` : "#"}>
+                 <button onClick={() => handleDisplayDirection(-1)} disabled={!prevPerson} className={`flex flex-col items-start ${!prevPerson ? 'opacity-30' : 'active:scale-95'}`}>
+                   <span className="text-[10px] text-slate-500 uppercase">Previous</span>
+                   <div className="flex items-center gap-1 text-sm text-slate-300 font-medium">
+                     <ChevronLeft className="h-4 w-4" />
+                     {prevPerson ? <span className="max-w-[100px] truncate">{prevPerson.name}</span> : <span>None</span>}
+                   </div>
+                 </button>
+               </Link>
+               <Link href={nextPerson ? `/people/${nextPerson.id}` : "#"}>
+                 <button onClick={() => handleDisplayDirection(1)} disabled={!nextPerson} className={`flex flex-col items-end ${!nextPerson ? 'opacity-30' : 'active:scale-95'}`}>
+                   <span className="text-[10px] text-slate-500 uppercase">Next</span>
+                   <div className="flex items-center gap-1 text-sm text-slate-300 font-medium">
+                     {nextPerson ? <span className="max-w-[100px] truncate">{nextPerson.name}</span> : <span>None</span>}
+                     <ChevronRight className="h-4 w-4" />
+                   </div>
+                 </button>
+               </Link>
+            </div>
+
+          </motion.div>
+        </AnimatePresence>
+      </main>
+    </div>
+    </>
   );
 }
 

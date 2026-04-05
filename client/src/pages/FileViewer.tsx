@@ -86,7 +86,8 @@ export default function FileViewer() {
     }
 
     return (
-        <div className="h-screen w-full flex flex-col bg-background">
+        <>
+        <div className="hidden md:flex h-screen w-full flex-col bg-background">
             {/* Header */}
             <div className="h-16 border-b border-border flex items-center px-4 md:px-6 bg-card shrink-0 gap-4">
                 <Button variant="ghost" className="gap-2" onClick={() => window.history.back()}>
@@ -130,5 +131,53 @@ export default function FileViewer() {
                 )}
             </div>
         </div>
+
+        {/* MOBILE UI */}
+        <div className="md:hidden flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden pb-24">
+            <header className="fixed top-0 left-0 w-full z-50 flex items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
+               <button onClick={() => window.history.back()} className="text-slate-200 active:scale-95 hover:opacity-80 p-2 -ml-2 mr-2 z-10 relative">
+                 <ChevronLeft className="h-6 w-6" />
+               </button>
+               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                 <h1 className="font-bold tracking-[-0.02em] text-slate-100 text-base uppercase">Document</h1>
+               </div>
+               <div className="flex items-center gap-3 ml-auto z-10 relative border-l border-slate-800 pl-4">
+                 <button onClick={handleShare} className="text-slate-400 p-1 hover:text-white active:scale-95 transition-transform">
+                    <Share2 className="h-5 w-5" />
+                 </button>
+                 <a href={blobUrl || '#'} download={`document_${id}.pdf`} className={`text-cyan-400 p-1 hover:text-cyan-300 active:scale-95 transition-transform ${!blobUrl ? 'pointer-events-none opacity-50' : ''}`}>
+                    <Download className="h-5 w-5" />
+                 </a>
+               </div>
+            </header>
+
+            <main className="pt-16 flex-1 relative flex flex-col items-center p-4">               
+               <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-4 shadow-xl z-20 mb-4 shrink-0">
+                  <div className="h-16 w-16 bg-blue-500/10 rounded-2xl mx-auto flex items-center justify-center border border-blue-500/20">
+                     <ExternalLink className="h-8 w-8 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-slate-200 font-semibold text-lg">Secure Document</h3>
+                    <p className="text-slate-400 text-xs mt-1">This document has been decrypted locally. Tap below to view using your device's native PDF viewer.</p>
+                  </div>
+                  <a href={`/api/file/${id}`} target="_blank" rel="noopener noreferrer" className="block w-full">
+                      <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl active:scale-[0.98] transition-all shadow-md">
+                          Open in External Viewer
+                      </button>
+                  </a>
+               </div>
+               
+               <div className="flex-1 w-full rounded-2xl overflow-hidden border border-slate-800/50 relative bg-slate-900/50 backdrop-blur-sm z-10">
+                  {blobUrl && (
+                      <iframe
+                          src={blobUrl}
+                          className="absolute inset-0 w-full h-full border-none"
+                          title="Document Viewer"
+                      />
+                  )}
+               </div>
+            </main>
+        </div>
+        </>
     );
 }

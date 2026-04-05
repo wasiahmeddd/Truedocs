@@ -41,7 +41,9 @@ export default function PeopleList() {
   if (error) return <div className="p-8 text-center text-destructive">Failed to load people. Please try again.</div>;
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 max-w-7xl mx-auto">
+    <>
+    {/* DESKTOP UI */}
+    <div className="hidden md:block min-h-screen bg-background p-4 md:p-8 max-w-7xl mx-auto">
       <header className="flex items-center justify-between mb-8 md:mb-12">
         <div className="flex items-center gap-4">
           <Link href="/home">
@@ -136,6 +138,82 @@ export default function PeopleList() {
         </motion.div>
       )}
     </div>
+
+    {/* MOBILE UI */}
+    <div className="md:hidden flex flex-col min-h-screen bg-slate-950 text-slate-100 antialiased font-sans pb-24">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
+        <div className="flex items-center gap-3">
+          <Link href="/home">
+            <button className="text-slate-200 active:scale-95 transition-transform duration-200 hover:opacity-80 p-2 -ml-2">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          </Link>
+          <h1 className="font-bold tracking-[-0.02em] text-slate-100 text-base uppercase">People</h1>
+        </div>
+        <div className="flex items-center gap-2">
+           <CreatePersonDialog />
+        </div>
+      </header>
+
+      <main className="pt-24 px-4 space-y-4 flex-1">
+        <p className="text-[10px] font-medium tracking-[0.05em] uppercase text-cyan-400 px-1">Manage Family & Individuals</p>
+        
+        {people && people.length === 0 ? (
+          <div className="text-center py-20 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800 mt-8">
+            <User className="h-12 w-12 mx-auto text-slate-500 mb-4" />
+            <h3 className="text-lg font-medium text-slate-300">No people added yet</h3>
+            <p className="text-slate-400 text-xs mt-2 max-w-[240px] mx-auto text-center">Start by adding a family member or individual to manage securely.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {people?.map((person) => (
+              <div key={person.id} className="bg-slate-900 rounded-xl relative overflow-hidden border border-slate-800 transition-all duration-200 group flex items-stretch">
+                <Link href={`/people/${person.id}`} className="flex-1 p-4 flex items-center justify-between active:bg-slate-800">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-500/20">
+                      <span className="text-blue-400 font-bold text-lg">{person.name.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-base text-slate-100">{person.name}</h3>
+                      <p className="text-slate-400 text-xs mt-0.5">{person.cards.length} Records</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="text-slate-500 h-5 w-5 opacity-50" />
+                </Link>
+                
+                <div className="w-14 shrink-0 border-l border-slate-800 flex items-center justify-center">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="h-full w-full text-slate-400 hover:text-red-400 active:bg-red-500/10 transition-colors flex items-center justify-center">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-slate-900 border-slate-800 text-slate-200">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-slate-100">Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-400">
+                          This action cannot be undone. This will permanently delete <strong>{person.name}</strong> and remove all their associated cards.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deletePerson.mutate(person.id)}
+                          className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-600/30"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+    </>
   );
 }
 

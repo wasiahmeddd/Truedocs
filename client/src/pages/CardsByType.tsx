@@ -114,7 +114,8 @@ export default function CardsByType() {
   const hasCards = people && people.length > 0;
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 max-w-5xl mx-auto">
+    <>
+    <div className="hidden md:block min-h-screen bg-background p-4 md:p-8 max-w-5xl mx-auto">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-4 mb-8">
         <div className="flex items-center gap-4">
           <Link href="/cards">
@@ -204,19 +205,91 @@ export default function CardsByType() {
         </div>
       )}
 
+    </div>
+
+    {/* MOBILE UI */}
+    <div className="md:hidden flex flex-col min-h-screen bg-slate-950 text-slate-100 antialiased font-sans pb-24">
+      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
+        <div className="flex items-center gap-3">
+          <Link href="/cards">
+            <button className="text-slate-200 active:scale-95 transition-transform duration-200 hover:opacity-80 p-2 -ml-2">
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          </Link>
+          <h1 className="font-bold tracking-[-0.02em] text-slate-100 text-base uppercase truncate max-w-[200px]">{config.label} Records</h1>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="text-slate-200 p-2 rounded-lg active:bg-slate-800 transition-colors">
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-slate-900 border-slate-800 text-slate-200">
+            <DropdownMenuItem onClick={handleShareAll}>
+               <Share2 className="mr-2 h-4 w-4" /> Share All
+            </DropdownMenuItem>
+            {currentType && (
+              <DropdownMenuItem onClick={handleDeleteClick} className="text-red-400 focus:bg-red-400/10 focus:text-red-400">
+                <Trash2 className="mr-2 h-4 w-4" /> Delete Type
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      <main className="pt-24 px-4 space-y-6 flex-1">
+        <div className="flex justify-between items-center">
+          <p className="text-[10px] font-medium tracking-[0.05em] uppercase text-cyan-400 px-1">{people?.reduce((acc, p) => acc + p.cards.length, 0)} Total Found</p>
+          <GlobalAddCardDialog preselectedType={type} />
+        </div>
+
+        {!hasCards ? (
+          <div className="text-center py-20 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800 mt-8">
+            <FileText className="h-12 w-12 mx-auto text-slate-500 mb-4" />
+            <h3 className="text-lg font-medium text-slate-300">No {config.label} found</h3>
+            <p className="text-slate-500 text-xs mt-2 max-w-[200px] mx-auto">Go to a person's profile to add their {config.label}.</p>
+            <Link href="/people" className="mt-6 flex justify-center">
+               <Button variant="outline" size="sm" className="border-slate-700 bg-slate-800 text-slate-200">Go to People</Button>
+            </Link>
+          </div>
+        ) : (
+           <div className="space-y-6">
+             {people.map((person) => (
+               <div key={person.id} className="bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-800">
+                 <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-800/60">
+                   <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-bold shrink-0">
+                     {person.name.charAt(0).toUpperCase()}
+                   </div>
+                   <Link href={`/people/${person.id}`}>
+                     <h3 className="font-semibold text-base text-slate-200">{person.name}</h3>
+                   </Link>
+                 </div>
+                 
+                 <div className="flex flex-col gap-3">
+                   {person.cards.map((card) => (
+                     <CardItem key={card.id} card={card} />
+                   ))}
+                 </div>
+               </div>
+             ))}
+           </div>
+        )}
+      </main>
+
+      {/* KEEP THE COMMON ALERTS MOUNTED IN ROOT */}
       <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-slate-900 border-slate-800 text-slate-200">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Card Type?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-slate-100">Delete Card Type?</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
               {deleteWarning || "Are you sure you want to delete this card type? This action cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-600/30"
             >
               {deleteWarning ? "Yes, Delete Everything" : "Delete"}
             </AlertDialogAction>
@@ -224,6 +297,7 @@ export default function CardsByType() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </>
   );
 }
 
