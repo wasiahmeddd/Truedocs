@@ -26,6 +26,15 @@ export function AddCardDialog({ personId }: AddCardDialogProps) {
   const [open, setOpen] = useState(false);
   const createCard = useCreateCard();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documentNumber, setDocumentNumber] = useState("");
+  const [documentName, setDocumentName] = useState("");
+
+  const resetFormState = () => {
+    form.reset({ personId, type: "aadhaar", filename: "placeholder" });
+    setSelectedFile(null);
+    setDocumentNumber("");
+    setDocumentName("");
+  };
 
   const form = useForm<InsertCard>({
     resolver: zodResolver(insertCardSchema.omit({ filename: true })), // Omit filename validation since handle it manually
@@ -43,19 +52,28 @@ export function AddCardDialog({ personId }: AddCardDialogProps) {
     const formData = new FormData();
     formData.append("personId", data.personId.toString());
     formData.append("type", data.type);
+    if (documentNumber.trim()) formData.append("documentNumber", documentNumber.trim());
+    if (documentName.trim()) formData.append("documentName", documentName.trim());
     formData.append("file", selectedFile);
 
     createCard.mutate(formData as any, {
       onSuccess: () => {
         setOpen(false);
-        form.reset({ personId, type: "aadhaar", filename: "placeholder" });
-        setSelectedFile(null);
+        resetFormState();
       },
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          resetFormState();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2 border-dashed">
           <Plus className="h-4 w-4" /> Add Card
@@ -103,6 +121,24 @@ export function AddCardDialog({ personId }: AddCardDialogProps) {
                 </FormItem>
               )}
             />
+
+            <FormItem>
+              <FormLabel>Card Number <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+              <Input
+                placeholder="e.g. 1234 5678 9012"
+                value={documentNumber}
+                onChange={(e) => setDocumentNumber(e.target.value)}
+              />
+            </FormItem>
+
+            <FormItem>
+              <FormLabel>Name on Card <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+              <Input
+                placeholder="e.g. Wasi Ahmed"
+                value={documentName}
+                onChange={(e) => setDocumentName(e.target.value)}
+              />
+            </FormItem>
 
             <FormItem>
               <FormLabel>Upload File</FormLabel>

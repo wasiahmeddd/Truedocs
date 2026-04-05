@@ -9,12 +9,16 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development DATABASE_URL=postgresql://postgres:Wa12si34@localhost:5432/govt_cards tsx watch server/index.ts",
     "build": "tsx script/build.ts",
+    "cap:build": "npm run build && npx cap sync android",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "set-admin": "cross-env DATABASE_URL=postgresql://postgres:Wa12si34@localhost:5432/govt_cards tsx scripts/set_admin.ts"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
@@ -56,6 +60,7 @@
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
     "date-fns": "^3.6.0",
+    "dexie": "^4.4.2",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.39.3",
     "drizzle-zod": "^0.7.0",

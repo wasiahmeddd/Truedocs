@@ -1,15 +1,14 @@
 import { Link } from "wouter";
-import { Users, CreditCard, ChevronRight, LogOut } from "lucide-react";
+import { Users, CreditCard, ChevronRight, LogOut, ShieldCheck, Shield, Lock, IdCard as BadgeIcon, Plane, Home as HomeIcon, User, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { useAuth } from "@/context/AuthContext";
+import { usePeople } from "@/hooks/use-people";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CryptoWalletDrawer } from "@/components/CryptoWalletDrawer";
-import { ShieldCheck } from "lucide-react";
 import { TransferAllDataCard } from "@/components/TransferAllDataCard";
-import { Shield, Clock, Lock, IdCard as BadgeIcon, Plane, Home as HomeIcon, User, Settings } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +23,8 @@ import {
 
 export default function Home() {
   const { logout } = useAuth();
+  const { data: allPeople } = usePeople();
+  const totalCards = allPeople?.reduce((sum, p) => sum + p.cards.length, 0) || 0;
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -247,12 +248,14 @@ export default function Home() {
               </div>
             </Link>
 
-            {/* Recent Activity / Small Insight */}
+            {/* Quick Stats */}
             <div className="bg-slate-900 rounded-xl p-6 relative flex flex-col justify-between aspect-square border border-slate-800">
-              <Clock className="text-emerald-400 h-8 w-8" />
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <Shield className="text-emerald-400 h-5 w-5" />
+              </div>
               <div>
-                <span className="font-bold text-2xl text-slate-200">Secure</span>
-                <p className="text-slate-400 text-[10px] mt-1 sm:text-xs">Database Encrypted</p>
+                <span className="font-bold text-2xl text-slate-200">{totalCards}</span>
+                <p className="text-slate-400 text-[10px] mt-1 sm:text-xs">Documents Stored</p>
               </div>
             </div>
 

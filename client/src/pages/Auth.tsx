@@ -9,20 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Lock, User, KeyRound, Loader2, ArrowRight, AlertTriangle, FileDown, Eye, EyeOff, Wallet } from "lucide-react";
-// ... (keep existing lines)
-
-
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { generateEmergencyKit } from "@/utils/generateEmergencyKit";
 
 export default function AuthPage() {
-    const { loginMutation, user } = useAuth();
+    const { loginMutation, registerMutation, user } = useAuth();
     const [, setLocation] = useLocation();
     const { toast } = useToast();
     const [activeTab, setActiveTab] = useState("login");
     const [showWarning, setShowWarning] = useState(false);
+    const [suppressRedirect, setSuppressRedirect] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -39,42 +35,14 @@ export default function AuthPage() {
 
     // Redirect if already logged in AND not showing warning
     useEffect(() => {
-        if (user && !showWarning) {
+        if (user && !showWarning && !suppressRedirect) {
             if (user.isAdmin) {
                 setLocation("/admin");
             } else {
                 setLocation("/home");
             }
         }
-    }, [user, setLocation, showWarning]);
-
-
-    // Registration Mutation
-    const registerMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const res = await apiRequest("POST", "/api/register", data);
-            return await res.json();
-        },
-        onSuccess: (userData) => {
-            toast({
-                title: "Welcome aboard!",
-                description: "Your secure vault has been created.",
-            });
-            // Update cache immediately to log user in on frontend
-            queryClient.setQueryData(["/api/user"], userData.user || userData);
-
-            // SHOW WARNING instead of redirecting
-            setShowWarning(true);
-        },
-        onError: (error: Error) => {
-            toast({
-                title: "Registration failed",
-                description: error.message,
-                variant: "destructive",
-            });
-        },
-    });
-
+    }, [user, setLocation, showWarning, suppressRedirect]);
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         const formData = new FormData(e.target as HTMLFormElement);
@@ -107,7 +75,18 @@ export default function AuthPage() {
             return;
         }
 
-        registerMutation.mutate({ username: data.username, password: data.password });
+        setSuppressRedirect(true);
+        registerMutation.mutate(
+            { username: String(data.username), password: String(data.password) },
+            {
+                onSuccess: () => {
+                    setShowWarning(true);
+                },
+                onError: () => {
+                    setSuppressRedirect(false);
+                },
+            },
+        );
     };
 
     const handleDownloadKit = () => {
@@ -164,7 +143,10 @@ export default function AuthPage() {
 
                                 <Button
                                     variant="ghost"
-                                    onClick={() => setLocation("/home")}
+                                    onClick={() => {
+                                        setSuppressRedirect(false);
+                                        setLocation("/home");
+                                    }}
                                     className="text-slate-400 hover:text-white"
                                 >
                                     I understand, take me to my vault

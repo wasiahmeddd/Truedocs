@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { StorageModeProvider } from "@/lib/storage-mode";
 
 import Home from "@/pages/Home";
 import PeopleList from "@/pages/PeopleList";
@@ -49,7 +50,6 @@ function Router() {
       <Route path="/cards" component={() => <PrivateRoute component={CardsList} />} />
       <Route path="/cards/:type" component={(params) => <PrivateRoute component={CardsByType} params={params} />} />
       <Route path="/view/:id" component={(params) => <PrivateRoute component={FileViewer} params={params} />} />
-      <Route path="/view/:id" component={(params) => <PrivateRoute component={FileViewer} params={params} />} />
       <Route path="/error" component={ErrorPage} />
       <Route path="/password-recovery-tool" component={PasswordRecovery} />
       <Route component={NotFound} />
@@ -65,12 +65,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>
-          <ThemeToggle />
-          <Toaster />
-          <Router />
-          <MobileNav />
-        </AuthProvider>
+        <StorageModeProvider>
+          <AuthProvider>
+            <ThemeToggle />
+            <Toaster />
+            <Router />
+            <MobileNav />
+          </AuthProvider>
+        </StorageModeProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

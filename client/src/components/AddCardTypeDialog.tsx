@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
 import {
     Dialog,
     DialogContent,
@@ -18,6 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import { IconMap } from "@/lib/icon-map";
+import { useCreateCardType } from "@/hooks/use-card-types";
 
 const addCardTypeSchema = z.object({
     slug: z.string().min(1, "Required").regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers, and hyphens only"),
@@ -40,8 +39,7 @@ const PRESET_COLORS = [
 
 export function AddCardTypeDialog() {
     const [open, setOpen] = useState(false);
-    const { toast } = useToast();
-    const queryClient = useQueryClient();
+    const mutation = useCreateCardType();
 
     const form = useForm({
         resolver: zodResolver(addCardTypeSchema),
@@ -51,34 +49,6 @@ export function AddCardTypeDialog() {
             description: "",
             icon: "FileText",
             color: PRESET_COLORS[0].value,
-        },
-    });
-
-    const mutation = useMutation({
-        mutationFn: async (values: z.infer<typeof addCardTypeSchema>) => {
-            const res = await fetch("/api/card-types", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(values),
-            });
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.message || "Failed to create type");
-            }
-            return res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["cardTypes"] });
-            toast({ title: "Success", description: "Card type created" });
-            setOpen(false);
-            form.reset();
-        },
-        onError: (err: Error) => {
-            toast({
-                title: "Error",
-                description: err.message,
-                variant: "destructive",
-            });
         },
     });
 
@@ -95,7 +65,17 @@ export function AddCardTypeDialog() {
                     <DialogTitle>Add New Card Type</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))} className="space-y-4 pt-4">
+                    <form
+                        onSubmit={form.handleSubmit((data) =>
+                            mutation.mutate(data, {
+                                onSuccess: () => {
+                                    setOpen(false);
+                                    form.reset();
+                                },
+                            }),
+                        )}
+                        className="space-y-4 pt-4"
+                    >
                         <FormField
                             control={form.control}
                             name="label"

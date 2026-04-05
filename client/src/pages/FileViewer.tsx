@@ -1,28 +1,54 @@
 import { useRoute, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, FileX, Loader2, Share2, Download, ExternalLink } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { shareContent } from "@/lib/share-util";
 import { useToast } from "@/hooks/use-toast";
+import { useStorageMode } from "@/lib/storage-mode";
+import { useAuth } from "@/context/AuthContext";
+import { localDb } from "@/lib/local-db";
+import { decryptBlob } from "@/lib/local-crypto";
 
 export default function FileViewer() {
     const [, params] = useRoute("/view/:id");
     const id = params ? parseInt(params.id) : 0;
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
+    const [fileBlob, setFileBlob] = useState<Blob | null>(null);
+    const [filename, setFilename] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const { toast } = useToast();
+    const { mode } = useStorageMode();
+    const { user, encryptionKey } = useAuth();
+
+    const externalHref = useMemo(() => {
+        if (!id) {
+            return "#";
+        }
+
+        return mode === "local" ? blobUrl || "#" : `/api/file/${id}`;
+    }, [blobUrl, id, mode]);
 
     const handleShare = async () => {
         if (!id) return;
-        const result = await shareContent(`/api/file/${id}`, `document_${id}.pdf`, "Share Document");
+
+        const target = mode === "local"
+            ? fileBlob
+            : `/api/file/${id}`;
+
+        if (!target) {
+            return;
+        }
+
+        const result = await shareContent(target, filename || `document_${id}.pdf`, "Share Document");
         if (result.status === "copied") {
             toast({ title: "Link copied", description: "Share link copied to clipboard." });
         } else if (result.status === "unsupported") {
             toast({
                 title: "Sharing not available",
-                description: "Native sharing on mobile requires HTTPS. Open the app over https:// and try again.",
+                description: mode === "local"
+                    ? "Your device does not support native sharing for this file."
+                    : "Native sharing on mobile requires HTTPS. Open the app over https:// and try again.",
                 variant: "destructive",
             });
         } else if (result.status === "error") {
@@ -35,31 +61,89 @@ export default function FileViewer() {
     };
 
     useEffect(() => {
-        if (!id) return;
+        let active = true;
+        let createdUrl: string | null = null;
 
-        setLoading(true);
-        fetch(`/api/file/${id}`)
-            .then(async (res) => {
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(text || "Failed to load file");
+        async function loadFile() {
+            if (!id) {
+                setError("Invalid file ID");
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            setError(null);
+
+            try {
+                let blob: Blob;
+                let nextFilename = `document_${id}.pdf`;
+
+                if (mode === "local") {
+                    if (!user?.id || !encryptionKey) {
+                        throw new Error("Please unlock the vault again to decrypt this file");
+                    }
+
+                    const card = await localDb.cards.get(id);
+                    if (!card) {
+                        throw new Error("Card not found");
+                    }
+
+                    const person = await localDb.people.get(card.personId);
+                    if (!person || person.userId !== user.id) {
+                        throw new Error("Access denied");
+                    }
+
+                    const storedFile = await localDb.files.where("cardId").equals(id).first();
+                    if (!storedFile) {
+                        throw new Error("Encrypted file not found");
+                    }
+
+                    blob = await decryptBlob(
+                        storedFile.encryptedData,
+                        storedFile.iv,
+                        encryptionKey,
+                        storedFile.mimeType,
+                    );
+                    nextFilename = storedFile.originalName || card.originalName || card.filename;
+                } else {
+                    const res = await fetch(`/api/file/${id}`, { credentials: "include" });
+                    if (!res.ok) {
+                        const text = await res.text();
+                        throw new Error(text || "Failed to load file");
+                    }
+
+                    blob = await res.blob();
                 }
-                return res.blob();
-            })
-            .then((blob) => {
-                const url = URL.createObjectURL(blob);
-                setBlobUrl(url);
-                setLoading(false);
-            })
-            .catch((e) => {
-                setError(e.message);
-                setLoading(false);
-            });
+
+                createdUrl = URL.createObjectURL(blob);
+                if (!active) {
+                    URL.revokeObjectURL(createdUrl);
+                    return;
+                }
+
+                setBlobUrl(createdUrl);
+                setFileBlob(blob);
+                setFilename(nextFilename);
+            } catch (nextError) {
+                if (active) {
+                    setError((nextError as Error).message);
+                }
+            } finally {
+                if (active) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        loadFile();
 
         return () => {
-            if (blobUrl) URL.revokeObjectURL(blobUrl);
+            active = false;
+            if (createdUrl) {
+                URL.revokeObjectURL(createdUrl);
+            }
         };
-    }, [id]);
+    }, [encryptionKey, id, mode, user?.id]);
 
     if (loading) {
         return (
@@ -88,7 +172,6 @@ export default function FileViewer() {
     return (
         <>
         <div className="hidden md:flex h-screen w-full flex-col bg-background">
-            {/* Header */}
             <div className="h-16 border-b border-border flex items-center px-4 md:px-6 bg-card shrink-0 gap-4">
                 <Button variant="ghost" className="gap-2" onClick={() => window.history.back()}>
                     <ChevronLeft className="h-5 w-5" /> Back
@@ -101,7 +184,7 @@ export default function FileViewer() {
                         <Share2 className="h-4 w-4 mr-2" />
                         Share
                     </Button>
-                    <a href={blobUrl || '#'} download={`document_${id}.pdf`} className={!blobUrl ? 'pointer-events-none opacity-50' : ''}>
+                    <a href={blobUrl || "#"} download={filename || `document_${id}.pdf`} className={!blobUrl ? "pointer-events-none opacity-50" : ""}>
                         <Button variant="default" size="sm">
                             <Download className="h-4 w-4 mr-2" />
                             Download / Open
@@ -110,12 +193,10 @@ export default function FileViewer() {
                 </div>
             </div>
 
-            {/* Viewer Content */}
             <div className="flex-1 bg-muted/20 relative flex flex-col">
-                {/* Mobile PDF Fallback/Action */}
                 <div className="md:hidden p-4 bg-background border-b text-center">
                     <p className="text-sm text-muted-foreground mb-2">Having trouble viewing?</p>
-                    <a href={`/api/file/${id}`} target="_blank" rel="noopener noreferrer">
+                    <a href={externalHref} target="_blank" rel="noopener noreferrer">
                         <Button variant="outline" className="w-full gap-2">
                             <ExternalLink className="h-4 w-4" /> Open in New Tab
                         </Button>
@@ -132,7 +213,6 @@ export default function FileViewer() {
             </div>
         </div>
 
-        {/* MOBILE UI */}
         <div className="md:hidden flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden pb-24">
             <header className="fixed top-0 left-0 w-full z-50 flex items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
                <button onClick={() => window.history.back()} className="text-slate-200 active:scale-95 hover:opacity-80 p-2 -ml-2 mr-2 z-10 relative">
@@ -145,28 +225,28 @@ export default function FileViewer() {
                  <button onClick={handleShare} className="text-slate-400 p-1 hover:text-white active:scale-95 transition-transform">
                     <Share2 className="h-5 w-5" />
                  </button>
-                 <a href={blobUrl || '#'} download={`document_${id}.pdf`} className={`text-cyan-400 p-1 hover:text-cyan-300 active:scale-95 transition-transform ${!blobUrl ? 'pointer-events-none opacity-50' : ''}`}>
+                 <a href={blobUrl || "#"} download={filename || `document_${id}.pdf`} className={`text-cyan-400 p-1 hover:text-cyan-300 active:scale-95 transition-transform ${!blobUrl ? "pointer-events-none opacity-50" : ""}`}>
                     <Download className="h-5 w-5" />
                  </a>
                </div>
             </header>
 
-            <main className="pt-16 flex-1 relative flex flex-col items-center p-4">               
+            <main className="pt-16 flex-1 relative flex flex-col items-center p-4">
                <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-4 shadow-xl z-20 mb-4 shrink-0">
                   <div className="h-16 w-16 bg-blue-500/10 rounded-2xl mx-auto flex items-center justify-center border border-blue-500/20">
                      <ExternalLink className="h-8 w-8 text-blue-400" />
                   </div>
                   <div>
                     <h3 className="text-slate-200 font-semibold text-lg">Secure Document</h3>
-                    <p className="text-slate-400 text-xs mt-1">This document has been decrypted locally. Tap below to view using your device's native PDF viewer.</p>
+                    <p className="text-slate-400 text-xs mt-1">This document has been decrypted locally. Tap below to view using your device's native viewer.</p>
                   </div>
-                  <a href={`/api/file/${id}`} target="_blank" rel="noopener noreferrer" className="block w-full">
-                      <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl active:scale-[0.98] transition-all shadow-md">
+                  <a href={externalHref} target="_blank" rel="noopener noreferrer" className="block w-full">
+                      <button type="button" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl active:scale-[0.98] transition-all shadow-md">
                           Open in External Viewer
                       </button>
                   </a>
                </div>
-               
+
                <div className="flex-1 w-full rounded-2xl overflow-hidden border border-slate-800/50 relative bg-slate-900/50 backdrop-blur-sm z-10">
                   {blobUrl && (
                       <iframe

@@ -1,5 +1,4 @@
 import { Link } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, ChevronRight } from "lucide-react";
@@ -7,7 +6,7 @@ import { motion } from "framer-motion";
 import { GlobalAddCardDialog } from "@/components/GlobalAddCardDialog";
 import { getIcon } from "@/lib/icon-map";
 import { AddCardTypeDialog } from "@/components/AddCardTypeDialog";
-import { useToast } from "@/hooks/use-toast";
+import { useCardTypes } from "@/hooks/use-card-types";
 
 type CardType = {
   id: number;
@@ -19,17 +18,7 @@ type CardType = {
 };
 
 export default function CardsList() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const { data: cardTypes, isLoading } = useQuery<CardType[]>({
-    queryKey: ['cardTypes'],
-    queryFn: async () => {
-      const res = await fetch('/api/card-types');
-      if (!res.ok) throw new Error('Failed to fetch types');
-      return res.json();
-    }
-  });
+  const { data: cardTypes, isLoading } = useCardTypes();
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -108,23 +97,21 @@ export default function CardsList() {
 
     {/* MOBILE UI */}
     <div className="md:hidden flex flex-col min-h-screen bg-slate-950 text-slate-100 antialiased font-sans pb-24">
-      <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
-        <div className="flex items-center gap-3">
-          <Link href="/home">
-            <button className="text-slate-200 active:scale-95 transition-transform duration-200 hover:opacity-80 p-2 -ml-2">
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-          </Link>
-          <h1 className="font-bold tracking-[-0.02em] text-slate-100 text-base uppercase">Document Types</h1>
+      <header className="fixed top-0 left-0 w-full z-50 flex items-center px-4 h-16 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <h1 className="font-bold tracking-[0.08em] text-slate-100 text-sm uppercase">Card Vault</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto z-10 relative">
            <AddCardTypeDialog />
            <GlobalAddCardDialog />
         </div>
       </header>
 
-      <main className="pt-24 px-4 space-y-4 flex-1">
-        <p className="text-[10px] font-medium tracking-[0.05em] uppercase text-cyan-400 px-1">Select a Category</p>
+      <main className="pt-20 px-4 space-y-4 flex-1">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[10px] font-medium tracking-[0.05em] uppercase text-cyan-400">Select a Category</p>
+          <span className="text-[10px] text-slate-500 font-medium">{cardTypes?.length || 0} types</span>
+        </div>
         
         <div className="flex flex-col gap-3">
           {cardTypes?.map((type) => {

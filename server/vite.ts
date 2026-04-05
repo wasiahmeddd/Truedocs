@@ -19,7 +19,12 @@ export async function setupVite(server: Server, app: Express) {
   };
 
   const viteConfigResolved = typeof viteConfig === "function"
-    ? await viteConfig()
+    ? await viteConfig({
+        command: "serve",
+        mode: process.env.NODE_ENV || "development",
+        isSsrBuild: false,
+        isPreview: false,
+      })
     : viteConfig;
 
   const vite = await createViteServer({

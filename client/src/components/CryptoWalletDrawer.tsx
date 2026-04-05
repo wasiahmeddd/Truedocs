@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +26,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    useCreateWallet,
+    useDeleteWallet,
+    usePermanentDeleteWallet,
+    useRestoreWallet,
+    useWallets,
+} from "@/hooks/use-wallets";
 
 export function CryptoWalletDrawer({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -62,9 +67,7 @@ export function CryptoWalletDrawer({ children }: { children: React.ReactNode }) 
 }
 
 function WalletManager({ onViewChange }: { onViewChange: (v: "list" | "create") => void }) {
-    const { data: deletedWallets } = useQuery<CryptoWallet[]>({
-        queryKey: ["/api/wallets/deleted"]
-    });
+    const { data: deletedWallets } = useWallets(true);
     const [showExpirationAlert, setShowExpirationAlert] = useState(false);
     const [expiringWallet, setExpiringWallet] = useState<CryptoWallet | null>(null);
 
@@ -139,19 +142,8 @@ function WalletManager({ onViewChange }: { onViewChange: (v: "list" | "create") 
 }
 
 function ActiveWalletList() {
-    const { data: wallets, isLoading } = useQuery<CryptoWallet[]>({
-        queryKey: ["/api/wallets"]
-    });
-
-    const deleteMutation = useMutation({
-        mutationFn: async (id: number) => {
-            await apiRequest("DELETE", `/api/wallets/${id}`);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/wallets/deleted"] });
-        }
-    });
+    const { data: wallets, isLoading } = useWallets(false);
+    const deleteMutation = useDeleteWallet();
 
     if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
 
@@ -185,32 +177,13 @@ function ActiveWalletList() {
 }
 
 function RecycleBinList() {
-    const { data: wallets, isLoading } = useQuery<CryptoWallet[]>({
-        queryKey: ["/api/wallets/deleted"]
-    });
+    const { data: wallets, isLoading } = useWallets(true);
 
     // State for tracking which wallet is being permanently deleted
     const [walletToDelete, setWalletToDelete] = useState<number | null>(null);
 
-    const restoreMutation = useMutation({
-        mutationFn: async (id: number) => {
-            await apiRequest("POST", `/api/wallets/${id}/restore`);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/wallets/deleted"] });
-        }
-    });
-
-    const permanentDeleteMutation = useMutation({
-        mutationFn: async (id: number) => {
-            await apiRequest("DELETE", `/api/wallets/${id}/permanent`);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/wallets/deleted"] });
-            setWalletToDelete(null); // Close dialog
-        }
-    });
+    const restoreMutation = useRestoreWallet();
+    const permanentDeleteMutation = usePermanentDeleteWallet();
 
     if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
 
@@ -261,7 +234,12 @@ function RecycleBinList() {
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={() => walletToDelete && permanentDeleteMutation.mutate(walletToDelete)}
+                            onClick={() => {
+                                if (!walletToDelete) return;
+                                permanentDeleteMutation.mutate(walletToDelete, {
+                                    onSuccess: () => setWalletToDelete(null),
+                                });
+                            }}
                             className="bg-destructive hover:bg-destructive/90"
                         >
                             Delete Forever
@@ -368,20 +346,7 @@ function CreateWalletForm({ onCancel, onSuccess }: { onCancel: () => void, onSuc
     const { toast } = useToast();
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const createMutation = useMutation({
-        mutationFn: async (data: any) => {
-            const res = await apiRequest("POST", "/api/wallets", data);
-            return await res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-            toast({ title: "Wallet Protected", description: "Your seed phrase has been encrypted and stored." });
-            onSuccess();
-        },
-        onError: (err: Error) => {
-            toast({ title: "Error", description: err.message, variant: "destructive" });
-        }
-    });
+    const createMutation = useCreateWallet();
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
@@ -443,6 +408,10 @@ function CreateWalletForm({ onCancel, onSuccess }: { onCancel: () => void, onSuc
             walletName: name,
             wordCount,
             seedPhrase: seedWords.join(" ")
+        }, {
+            onSuccess: () => {
+                onSuccess();
+            }
         });
     };
 

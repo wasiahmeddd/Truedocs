@@ -47,6 +47,8 @@ export const cards = pgTable("cards", {
   filename: text("filename").notNull(),
   originalName: text("original_name"),
   title: text("title"),
+  documentNumber: text("document_number"),
+  documentName: text("document_name"),
 });
 
 export const settings = pgTable("settings", {

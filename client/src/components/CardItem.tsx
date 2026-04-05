@@ -66,117 +66,155 @@ export function CardItem({ card }: CardItemProps) {
   };
   const Icon = config.icon;
 
+  const hasMetadata = !!(card.documentNumber || card.documentName);
+
   return (
     <Card className="group overflow-hidden border-l-4 border-l-primary transition-all duration-300 hover:shadow-md">
-      <CardContent className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className={`h-10 w-10 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 ${config.color}`}>
-            <Icon className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-semibold capitalize text-foreground">
-                {card.title || config.label}
-              </span>
-              <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">{card.filename.split('.').pop()}</Badge>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            <div className={`h-10 w-10 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 ${config.color}`}>
+              <Icon className="h-5 w-5" />
             </div>
-            <p className="text-sm text-muted-foreground truncate max-w-[200px]">
-              {card.title ? config.label : card.filename}
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold capitalize text-foreground truncate">
+                  {card.title || config.label}
+                </span>
+                <Badge variant="secondary" className="text-[10px] uppercase tracking-wider shrink-0">{card.filename.split('.').pop()}</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+                {card.title ? config.label : card.filename}
+              </p>
+            </div>
+          </div>
+
+          {/* Desktop Actions (Hover) */}
+          <div className="hidden md:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
+            <Button variant="ghost" size="icon" onClick={() => setShowMetadataDialog(true)} title="View Metadata">
+              <Info className="h-4 w-4 text-primary" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleOpenPdf} title="View PDF">
+              <ExternalLink className="h-4 w-4 text-primary" />
+            </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={deleteCard.isPending}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="Delete Card"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Card</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this card? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteCard.mutate({ id: card.id, personId: card.personId })}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+
+          {/* Mobile Actions (Dropdown) */}
+          <div className="md:hidden shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowMetadataDialog(true)}>
+                  <Info className="mr-2 h-4 w-4 text-primary" />
+                  Metadata
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleOpenPdf}>
+                  <ExternalLink className="mr-2 h-4 w-4 text-primary" />
+                  Open PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setShowDeleteAlert(true);
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Card</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this card? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteCard.mutate({ id: card.id, personId: card.personId })}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
 
-        {/* Desktop Actions (Hover) */}
-        <div className="hidden md:flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <Button variant="ghost" size="icon" onClick={() => setShowMetadataDialog(true)} title="View Metadata">
-            <Info className="h-4 w-4 text-primary" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleOpenPdf} title="View PDF">
-            <ExternalLink className="h-4 w-4 text-primary" />
-          </Button>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={deleteCard.isPending}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                title="Delete Card"
+        {/* Quick-Copy Metadata Row — shown directly on card face */}
+        {hasMetadata && (
+          <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap gap-2">
+            {card.documentNumber && (
+              <button
+                type="button"
+                onClick={() => handleCopy(card.documentNumber ?? "", "Card Number")}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 active:scale-95 transition-all text-xs text-blue-500 dark:text-blue-400 font-mono tracking-wide group/copy"
               >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Card</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete this card? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteCard.mutate({ id: card.id, personId: card.personId })}
-                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-
-        {/* Mobile Actions (Dropdown) */}
-        <div className="md:hidden">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreVertical className="h-4 w-4 text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setShowMetadataDialog(true)}>
-                <Info className="mr-2 h-4 w-4 text-primary" />
-                Metadata
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleOpenPdf}>
-                <ExternalLink className="mr-2 h-4 w-4 text-primary" />
-                Open PDF
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setShowDeleteAlert(true);
-                }}
+                {copiedField === "Card Number" ? (
+                  <Check className="h-3 w-3 text-green-500" />
+                ) : (
+                  <Copy className="h-3 w-3 opacity-60 group-hover/copy:opacity-100" />
+                )}
+                <span className="truncate max-w-[160px]">{card.documentNumber}</span>
+              </button>
+            )}
+            {card.documentName && (
+              <button
+                type="button"
+                onClick={() => handleCopy(card.documentName ?? "", "Name on Card")}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 transition-all text-xs text-emerald-500 dark:text-emerald-400 group/copy"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Card</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete this card? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteCard.mutate({ id: card.id, personId: card.personId })}
-                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+                {copiedField === "Name on Card" ? (
+                  <Check className="h-3 w-3 text-green-500" />
+                ) : (
+                  <Copy className="h-3 w-3 opacity-60 group-hover/copy:opacity-100" />
+                )}
+                <span className="truncate max-w-[140px]">{card.documentName}</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Metadata Dialog */}
         <Dialog open={showMetadataDialog} onOpenChange={setShowMetadataDialog}>
@@ -188,6 +226,8 @@ export function CardItem({ card }: CardItemProps) {
               {[
                 { label: "Title", value: card.title || "N/A" },
                 { label: "Type", value: card.type },
+                { label: "Card Number", value: card.documentNumber || "N/A" },
+                { label: "Name on Card", value: card.documentName || "N/A" },
                 { label: "Filename", value: card.filename },
                 { label: "Original Name", value: card.originalName || "N/A" },
                 { label: "Card ID", value: card.id.toString() },

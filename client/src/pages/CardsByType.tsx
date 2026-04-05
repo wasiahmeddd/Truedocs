@@ -11,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import { GlobalAddCardDialog } from "@/components/GlobalAddCardDialog";
 import { CARD_CONFIG } from "@/lib/card-config";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -32,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Trash2 } from "lucide-react";
+import { useCardTypes, useDeleteCardType } from "@/hooks/use-card-types";
+import { useStorageMode } from "@/lib/storage-mode";
 
 export default function CardsByType() {
   const [, params] = useRoute("/cards/:type");
@@ -43,15 +44,8 @@ export default function CardsByType() {
   const [, setLocation] = useLocation();
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
-
-  const { data: cardTypes } = useQuery<any[]>({
-    queryKey: ['cardTypes'],
-    queryFn: async () => {
-      const res = await fetch('/api/card-types');
-      if (!res.ok) throw new Error('Failed to fetch types');
-      return res.json();
-    }
-  });
+  const { mode } = useStorageMode();
+  const { data: cardTypes } = useCardTypes();
 
   const config = CARD_CONFIG[type] || { icon: FileText, label: type, desc: "", color: "text-primary bg-primary/10" };
   const Icon = config.icon;
@@ -60,6 +54,14 @@ export default function CardsByType() {
 
   const handleShareAll = async () => {
     if (!type) return;
+    if (mode === "local") {
+      toast({
+        title: "Offline mode",
+        description: "Type export is only available in server mode right now.",
+      });
+      return;
+    }
+
     const result = await shareContent(
       `/api/cards/type/${type}/export`,
       `${type}_cards.zip`,
@@ -83,19 +85,7 @@ export default function CardsByType() {
     }
   };
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentType) return;
-      await fetch(`/api/card-types/${currentType.id}`, { method: 'DELETE' });
-    },
-    onSuccess: () => {
-      toast({ title: "Deleted", description: "Card type removed successfully." });
-      setLocation('/cards');
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to delete card type.", variant: "destructive" });
-    }
-  });
+  const deleteMutation = useDeleteCardType();
 
   const handleDeleteClick = () => {
     if (people && people.length > 0) {
@@ -288,7 +278,12 @@ export default function CardsByType() {
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteMutation.mutate()}
+              onClick={() => {
+                if (!currentType) return;
+                deleteMutation.mutate(currentType.id, {
+                  onSuccess: () => setLocation("/cards"),
+                });
+              }}
               className="bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-600/30"
             >
               {deleteWarning ? "Yes, Delete Everything" : "Delete"}

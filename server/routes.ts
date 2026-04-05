@@ -261,7 +261,9 @@ export async function registerRoutes(
         type,
         title: req.body.title || undefined,
         filename: storageFilename,
-        originalName: req.file.originalname
+        originalName: req.file.originalname,
+        documentNumber: req.body.documentNumber || undefined,
+        documentName: req.body.documentName || undefined,
       });
 
       res.status(201).json(card);

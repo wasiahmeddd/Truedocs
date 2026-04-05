@@ -5,7 +5,6 @@ import { insertCardSchema, type InsertCard } from "@shared/schema";
 // import { CARD_TYPES } from "@shared/routes"; // Unused now
 import { useCreateCard } from "@/hooks/use-cards";
 import { usePeople } from "@/hooks/use-people";
-import { useQuery } from "@tanstack/react-query"; // Added
 import {
     Dialog,
     DialogContent,
@@ -21,6 +20,7 @@ import { Plus, FileBadge, Lock, CheckCircle } from "lucide-react";
 // import { CARD_CONFIG } from "@/lib/card-config"; // Unused now
 import { getIcon } from "@/lib/icon-map"; // Added
 import { motion } from "framer-motion";
+import { useCardTypes } from "@/hooks/use-card-types";
 
 interface GlobalAddCardDialogProps {
     preselectedType?: string;
@@ -32,15 +32,10 @@ export function GlobalAddCardDialog({ preselectedType }: GlobalAddCardDialogProp
     const createCard = useCreateCard();
     const { data: people } = usePeople();
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [documentNumber, setDocumentNumber] = useState("");
+    const [documentName, setDocumentName] = useState("");
 
-    const { data: cardTypes } = useQuery<any[]>({
-        queryKey: ['cardTypes'],
-        queryFn: async () => {
-            const res = await fetch('/api/card-types');
-            if (!res.ok) throw new Error('Failed to fetch types');
-            return res.json();
-        }
-    });
+    const { data: cardTypes } = useCardTypes();
 
     const form = useForm<InsertCard>({
         resolver: zodResolver(insertCardSchema.omit({ filename: true })),
@@ -50,6 +45,14 @@ export function GlobalAddCardDialog({ preselectedType }: GlobalAddCardDialogProp
             filename: "placeholder",
         },
     });
+
+    const resetFormState = () => {
+        setUploadStep('idle');
+        form.reset({ personId: 0, type: preselectedType || "aadhaar", filename: "placeholder" });
+        setSelectedFile(null);
+        setDocumentNumber("");
+        setDocumentName("");
+    };
 
     const onSubmit = async (data: InsertCard) => {
         if (!selectedFile || !data.personId) return;
@@ -66,6 +69,8 @@ export function GlobalAddCardDialog({ preselectedType }: GlobalAddCardDialogProp
         formData.append("personId", data.personId.toString());
         formData.append("type", data.type);
         if (data.title) formData.append("title", data.title);
+        if (documentNumber.trim()) formData.append("documentNumber", documentNumber.trim());
+        if (documentName.trim()) formData.append("documentName", documentName.trim());
         formData.append("file", selectedFile);
 
         createCard.mutate(formData as any, {
@@ -73,9 +78,7 @@ export function GlobalAddCardDialog({ preselectedType }: GlobalAddCardDialogProp
                 setUploadStep('success');
                 setTimeout(() => {
                     setOpen(false);
-                    setUploadStep('idle');
-                    form.reset({ personId: 0, type: preselectedType || "aadhaar", filename: "placeholder" });
-                    setSelectedFile(null);
+                    resetFormState();
                 }, 1000);
             },
             onError: () => {
@@ -88,6 +91,9 @@ export function GlobalAddCardDialog({ preselectedType }: GlobalAddCardDialogProp
         <Dialog open={open} onOpenChange={(v) => {
             if (!v && uploadStep !== 'idle') return; // Prevent closing during upload
             setOpen(v);
+            if (!v) {
+                resetFormState();
+            }
         }}>
             <DialogTrigger asChild>
                 <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-900/20">
@@ -247,6 +253,24 @@ export function GlobalAddCardDialog({ preselectedType }: GlobalAddCardDialogProp
                                     )}
                                 />
                             )}
+
+                            <FormItem>
+                                <FormLabel>Card Number <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                                <Input
+                                    placeholder="e.g. 1234 5678 9012"
+                                    value={documentNumber}
+                                    onChange={(e) => setDocumentNumber(e.target.value)}
+                                />
+                            </FormItem>
+
+                            <FormItem>
+                                <FormLabel>Name on Card <span className="text-muted-foreground font-normal">(Optional)</span></FormLabel>
+                                <Input
+                                    placeholder="e.g. Wasi Ahmed"
+                                    value={documentName}
+                                    onChange={(e) => setDocumentName(e.target.value)}
+                                />
+                            </FormItem>
 
                             <FormItem>
                                 <FormLabel>Upload File</FormLabel>
